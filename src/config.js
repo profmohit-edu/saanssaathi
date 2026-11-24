@@ -13,6 +13,8 @@ export const AIR_CACHE_TTL_MS = 10 * 60 * 1000;
 export const AIR_TIMEOUT_MS = 12_000;
 /** Gemini request timeout (ms). */
 export const GEMINI_TIMEOUT_MS = 30_000;
+/** On-device generation can be slow on older laptops, but must never hang the UI. */
+export const NANO_TIMEOUT_MS = 150_000;
 
 /** Default Gemini model; users can override it in Settings. */
 export const DEFAULT_MODEL = 'gemini-3.6-flash';

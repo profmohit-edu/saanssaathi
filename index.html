@@ -113,6 +113,7 @@
           <button type="button" class="btn primary" id="gen-plan">Personalise with Gemini</button>
         </div>
       </div>
+      <p id="ai-mode" class="ai-mode"></p>
       <p id="plan-status" class="status" role="status"></p>
       <div id="plan-out" aria-live="polite"></div>
     </section>
@@ -120,7 +121,7 @@
     <section class="wrap card" id="ask" aria-labelledby="ask-h">
       <div class="section-head">
         <h2 id="ask-h"><span class="step">6</span> Ask SaansSaathi</h2>
-        <p class="hint">Gemini answers using your family's own numbers.</p>
+        <p class="hint">Gemini answers using your family's own numbers, on your device or in the cloud.</p>
       </div>
       <div class="suggestions" id="suggestions"></div>
       <div id="chat-log" class="chat-log" aria-live="polite" aria-label="Conversation"></div>
@@ -158,8 +159,9 @@
 
   <dialog id="settings" aria-labelledby="settings-h">
     <form method="dialog" id="settings-form">
-      <h2 id="settings-h">Gemini settings</h2>
-      <p>SaansSaathi calls Gemini directly from your browser with your own key. Nothing goes through our servers, because there aren't any. Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a>.</p>
+      <h2 id="settings-h">AI settings</h2>
+      <p><strong>No key needed in Chrome on a computer:</strong> SaansSaathi uses Gemini Nano, Google's AI built into Chrome. It runs on your device, so your family's data never leaves your browser.</p>
+      <p>For the highest quality, add your own Gemini API key. Calls go straight from your browser to Google; there is no SaansSaathi server. Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a>.</p>
       <label for="api-key">Gemini API key</label>
       <input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your key">
       <label class="check"><input id="remember-key" type="checkbox"> Remember on this device (otherwise it's cleared when you close the tab)</label>

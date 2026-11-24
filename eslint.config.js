@@ -25,6 +25,8 @@ const browser = Object.fromEntries(
     'localStorage',
     'sessionStorage',
     'NodeFilter',
+    'EventTarget',
+    'Event',
   ].map((g) => [g, 'readonly']),
 );
 

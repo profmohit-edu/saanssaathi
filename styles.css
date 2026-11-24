@@ -228,3 +228,5 @@ dialog input { margin-bottom: .8rem; }
 .site-footer { margin-top: 2rem; padding: 1.5rem 0 2.5rem; color: var(--muted); font-size: .9rem; border-top: 1px solid var(--line); }
 .community { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
 .community li { background: #f2f7f3; border-radius: 12px; padding: .8rem 1rem; }
+.ai-mode { display: inline-block; font-size: .85rem; font-weight: 600; padding: .2rem .7rem; border-radius: 999px; background: #eef1f8; color: var(--ink-2); margin: 0 0 .3rem; }
+.ai-mode[data-provider="nano"], .ai-mode[data-provider="cloud"] { background: #e3f4e8; color: var(--good); }

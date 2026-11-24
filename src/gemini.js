@@ -8,6 +8,7 @@
  * @module gemini
  */
 
+import { formatRange } from './windows.js';
 import { DEFAULT_MODEL, GEMINI_TIMEOUT_MS, isValidModel, MAX_QUESTION_LENGTH, CHAT_HISTORY_TURNS } from './config.js';
 
 export { DEFAULT_MODEL };
@@ -26,7 +27,8 @@ export const LANGUAGES = Object.freeze({
 export const SYSTEM_INSTRUCTION = [
   'You are SaansSaathi, a calm, practical clean-air coach for families in Indian cities during winter smog.',
   'Ground every claim in the JSON context you are given (forecast, per-person inhaled dose, ranked swaps).',
-  'Quote the numbers you are given. Never invent pollution readings.',
+  'Quote the numbers you are given. Never invent pollution readings or clock times; use only the local times in the context.',
+  'Never recommend air fresheners, incense, candles, ozone generators or ionisers: they add indoor pollution.',
   'Explain cause and effect plainly: what each choice changes and by how much.',
   'Be specific to each named family member, their age, conditions and routine.',
   'You are not a doctor: for symptoms, advise seeing a clinician. Never diagnose or prescribe.',
@@ -78,8 +80,8 @@ export function buildContext({ place, env, state, dose, swaps }) {
       now: r(env.current),
       next24hMean: r(env.dailyMean),
       rushHourMean: r(env.commuteMean),
-      peak: env.peak && { from: env.peak.start.toISOString(), to: env.peak.end.toISOString(), mean: r(env.peak.mean) },
-      cleanest2h: best2 && { from: best2.start.toISOString(), to: best2.end.toISOString(), mean: r(best2.mean) },
+      worstWindowLocal: env.peak && { time: formatRange(env.peak.start, env.peak.end), mean: r(env.peak.mean) },
+      cleanestWindowLocal: best2 && { time: formatRange(best2.start, best2.end), mean: r(best2.mean) },
       whoDailyGuideline: 15,
     },
     home: state.home,
@@ -111,14 +113,17 @@ export function buildContext({ place, env, state, dose, swaps }) {
  * Prompt for the structured day plan.
  * @param {ReturnType<typeof buildContext>} context
  * @param {string} langCode
+ * @param {{compact?: boolean}} [opts] shorter output for the small on-device model
  */
-export function buildPlanPrompt(context, langCode = 'en') {
+export function buildPlanPrompt(context, langCode = 'en', { compact = false } = {}) {
   const lang = LANGUAGES[langCode] ?? LANGUAGES.en;
+  const items = compact ? '4–5' : '5–7';
+  const story = compact ? '2 sentences' : '3 sentences';
   return [
     `Write tomorrow's clean-air plan for this household. Respond in ${lang}.`,
-    'Give 5–7 schedule items with local clock times taken from the forecast windows,',
-    'one short piece of advice for each family member that mentions their numbers,',
-    'and an impactStory (3 sentences) about what doing the top 3 swaps would change for this family and their street.',
+    `Give ${items} schedule items. Use only the local times given in worstWindowLocal and cleanestWindowLocal, or plain labels such as "Commute" and "Bedtime".`,
+    'Give one short piece of advice for each family member that mentions their own numbers.',
+    `Add an impactStory (${story}) about what doing the top 3 swaps would change for this family and their street.`,
     'CONTEXT:',
     JSON.stringify(context),
   ].join('\n');

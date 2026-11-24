@@ -91,7 +91,7 @@ function setAttribute(el, key, value) {
  * @returns {P}
  */
 export function append(parent, children) {
-  const flat = /** @type {any[]} */ (children).flat(Infinity);
+  const flat = /** @type {unknown[]} */ (children).flat(Infinity);
   for (const c of flat) {
     if (c === null || c === undefined || c === false || Array.isArray(c)) {
       continue;

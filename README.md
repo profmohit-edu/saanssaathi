@@ -107,7 +107,7 @@ src/
   dom.js                XSS-safe DOM builder and typed lookups
   chart.js              dependency-free SVG chart + data table
   ui/                   air, household, results, assistant and share views
-tests/                  82 unit tests (node:test) + 18 browser tests (Playwright) covering every view
+tests/                  83 unit tests (node:test) + 18 browser tests (Playwright) covering every view
 ```
 
 The model layer has no DOM code and is unit-tested directly. Views only render state and report edits to the controller through a small `actions` interface. There is no framework, no build step and no runtime dependency.

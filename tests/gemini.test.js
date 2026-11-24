@@ -119,3 +119,14 @@ test('ask keeps history short and ends with the user turn', async () => {
   assert.equal(body.contents.at(-1).role, 'user');
   assert.match(body.contents[0].parts[0].text, /Tamil/);
 });
+
+test('context gives local clock times, never UTC timestamps', () => {
+  const json = JSON.stringify(ctx);
+  assert.doesNotMatch(json, /\d{4}-\d{2}-\d{2}T/);
+  assert.match(ctx.pm25.cleanestWindowLocal.time, /pm|am/i);
+});
+
+test('compact prompt asks for fewer items', () => {
+  assert.match(buildPlanPrompt(ctx, 'en', { compact: true }), /4–5 schedule items/);
+  assert.match(buildPlanPrompt(ctx, 'en'), /5–7 schedule items/);
+});

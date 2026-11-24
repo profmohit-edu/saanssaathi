@@ -192,3 +192,18 @@ test('a translation error returns the original text', async () => {
   });
   assert.equal(await translate('hello', 'ta', ai), 'hello');
 });
+
+test('a failed translator is retried on the next call', async () => {
+  const ai = fakeAI();
+  let attempt = 0;
+  const orig = ai.Translator.create;
+  ai.Translator.create = async (pair) => {
+    attempt++;
+    if (attempt === 1) {
+      throw new Error('Requires a user gesture');
+    }
+    return orig(pair);
+  };
+  assert.equal(await translate('hello', 'hi', ai), 'hello');
+  assert.equal(await translate('hello', 'hi', ai), '[hi] hello');
+});

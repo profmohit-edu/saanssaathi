@@ -141,8 +141,9 @@ export function promptWithTimeout(session, text, timeoutMs, opts = {}) {
   let timer;
   const timeout = new Promise((_, reject) => {
     timer = setTimeout(() => {
-      controller.abort();
-      reject(new Error('Gemini Nano took too long on this device.'));
+      const error = new Error('Gemini Nano took too long on this device.');
+      reject(error);
+      controller.abort(error);
     }, timeoutMs);
   });
   const run = session.prompt(text, { ...opts, signal: controller.signal });

@@ -6,6 +6,7 @@
  * @module ai/nano
  */
 import { SYSTEM_INSTRUCTION, buildPlanPrompt, parsePlan } from '../gemini.js';
+import { NANO_TIMEOUT_MS } from '../config.js';
 
 /** Gemini Nano output languages supported by the Prompt API. */
 const NANO_LANG = 'en';
@@ -118,21 +119,45 @@ export async function createNanoSession({ context, onProgress, ai = browserAI() 
  * Writes the plan on-device with a JSON-schema constraint.
  * @param {NanoSession} session
  * @param {ReturnType<typeof import('../gemini.js').buildContext>} context
+ * @param {number} [timeoutMs]
  */
-export async function nanoPlan(session, context) {
-  const text = await session.prompt(buildPlanPrompt(context, NANO_LANG, { compact: true }), {
-    responseConstraint: NANO_PLAN_SCHEMA,
-  });
+export async function nanoPlan(session, context, timeoutMs = NANO_TIMEOUT_MS) {
+  const prompt = buildPlanPrompt(context, NANO_LANG, { compact: true });
+  const text = await promptWithTimeout(session, prompt, timeoutMs, { responseConstraint: NANO_PLAN_SCHEMA });
   return { ...parsePlan(text), source: /** @type {const} */ ('gemini-nano') };
 }
 
 /**
- * One chat answer on-device. The session keeps the conversation history.
- * @param {{prompt: (text: string) => Promise<string>}} session
- * @param {string} question
+ * Runs one prompt, aborting it if the device takes longer than `timeoutMs`.
+ * @param {NanoSession} session
+ * @param {string} text
+ * @param {number} timeoutMs
+ * @param {object} [opts] extra prompt options
+ * @returns {Promise<string>}
  */
-export function nanoAsk(session, question) {
-  return session.prompt(`${String(question).slice(0, 1000)}\nAnswer in under 150 words using the household numbers.`);
+export function promptWithTimeout(session, text, timeoutMs, opts = {}) {
+  const controller = new AbortController();
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error('Gemini Nano took too long on this device.'));
+    }, timeoutMs);
+  });
+  const run = session.prompt(text, { ...opts, signal: controller.signal });
+  return /** @type {Promise<string>} */ (Promise.race([run, timeout])).finally(() => clearTimeout(timer));
+}
+
+/**
+ * One chat answer on-device. The session keeps the conversation history.
+ * @param {NanoSession} session
+ * @param {string} question
+ * @param {number} [timeoutMs]
+ */
+export function nanoAsk(session, question, timeoutMs = NANO_TIMEOUT_MS) {
+  const text = `${String(question).slice(0, 1000)}\nAnswer in under 150 words using the household numbers.`;
+  return promptWithTimeout(session, text, timeoutMs);
 }
 
 /** One translator promise per target language, created inside the click. */

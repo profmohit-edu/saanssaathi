@@ -71,6 +71,17 @@ export function resetNanoCache() {
 }
 
 /**
+ * A failed or timed-out on-device prompt can leave the session stuck, so the
+ * next request starts a fresh one.
+ * @param {unknown} error
+ * @returns {never}
+ */
+function dropSessionAndRethrow(error) {
+  resetNanoCache();
+  throw error;
+}
+
+/**
  * @typedef {object} RunOptions
  * @property {ProviderKind} provider
  * @property {string} apiKey
@@ -96,7 +107,8 @@ export async function planWith({ provider, apiKey, model, context, lang, onProgr
   if (provider === 'nano') {
     warmTranslator(lang, ai); // start language-pack download while the click still counts
     const session = await nanoSessionFor(context, onProgress, ai);
-    return translatePlan({ ...(await nanoPlan(session, context)), alerts }, lang, ai);
+    const plan = await nanoPlan(session, context).catch(dropSessionAndRethrow);
+    return translatePlan({ ...plan, alerts }, lang, ai);
   }
   throw new Error('No AI backend available.');
 }
@@ -124,7 +136,7 @@ export async function askWith({
   if (provider === 'nano') {
     warmTranslator(lang, ai);
     const session = await nanoSessionFor(context, onProgress, ai);
-    return translate(await nanoAsk(session, question), lang, ai);
+    return translate(await nanoAsk(session, question).catch(dropSessionAndRethrow), lang, ai);
   }
   throw new Error('No AI backend available.');
 }

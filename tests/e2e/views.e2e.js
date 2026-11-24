@@ -159,8 +159,11 @@ test('model text is rendered as text, never as HTML', async () => {
   await page.click('#open-settings');
   await page.fill('#api-key', 'k');
   await page.click('#save-settings');
+  await page.waitForFunction(() => !document.getElementById('settings')?.open);
   await page.fill('#chat-input', 'test');
-  await page.press('#chat-input', 'Enter');
+  // Click Ask rather than pressing Enter: after the dialog closes, the browser may
+  // move focus back to the settings button, and Enter would reopen the dialog.
+  await page.click('#chat-form button[type="submit"]');
   await page.waitForSelector('#chat-log strong');
   assert.equal(await page.locator('#chat-log img').count(), 0);
   assert.equal(await page.evaluate(() => globalThis.__pwned), undefined);

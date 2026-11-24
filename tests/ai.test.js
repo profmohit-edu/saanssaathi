@@ -7,6 +7,7 @@ import {
   nanoAsk,
   translate,
   translatePlan,
+  promptWithTimeout,
   NANO_PLAN_SCHEMA,
   warmTranslator,
   resetTranslators,
@@ -227,4 +228,39 @@ test('a failed translator is retried on the next call', async () => {
   };
   assert.equal(await translate('hello', 'hi', ai), 'hello');
   assert.equal(await translate('hello', 'hi', ai), '[hi] hello');
+});
+
+test('a stuck on-device prompt is aborted after the timeout', async () => {
+  let signal;
+  const stuck = {
+    prompt: (_text, opts) => {
+      signal = opts.signal;
+      return new Promise(() => {});
+    },
+  };
+  await assert.rejects(promptWithTimeout(stuck, 'hi', 20), /took too long/);
+  assert.equal(signal.aborted, true);
+});
+
+test('a prompt that answers in time is returned unchanged', async () => {
+  const quick = { prompt: async () => 'ok' };
+  assert.equal(await promptWithTimeout(quick, 'hi', 1000), 'ok');
+});
+
+test('askWith(nano) starts a fresh session after a failed prompt', async () => {
+  resetNanoCache();
+  let created = 0;
+  const ai = {
+    LanguageModel: {
+      availability: async () => 'available',
+      create: async () => {
+        created += 1;
+        return { prompt: async () => (created === 1 ? Promise.reject(new Error('device busy')) : 'fine') };
+      },
+    },
+  };
+  const opts = { provider: 'nano', apiKey: '', model: '', context: {}, lang: 'en', history: [], question: 'q', ai };
+  await assert.rejects(askWith(opts), /device busy/);
+  assert.equal(await askWith(opts), 'fine');
+  assert.equal(created, 2);
 });

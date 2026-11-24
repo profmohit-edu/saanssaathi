@@ -1,4 +1,4 @@
-# SaansSaathi · Smog Copilot for Families 🫁
+# SaansSaathi · Smog Copilot for Families
 
 **PromptWars Virtual, Challenge 6: Urban Air Quality Assistant**
 

@@ -103,6 +103,7 @@
  * @property {Set<string>} selected
  * @property {ChatTurn[]} chat
  * @property {Plan | null} aiPlan
+ * @property {Plan | null} lastPlan the plan currently on screen
  * @property {boolean} busy
  */
 

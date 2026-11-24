@@ -12,6 +12,9 @@ import { MAX_MEMBERS, MAX_NAME_LENGTH, MAX_COMMUTE_HOURS, MAX_OUTDOOR_HOURS } fr
 const KEY = 'saans.household.v1';
 const KEY_API = 'saans.gemini.key';
 const KEY_PREFS = 'saans.prefs.v1';
+const KEY_FORECAST = 'saans.forecast.v1';
+/** How long a saved forecast may be shown offline (ms). */
+const FORECAST_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 let seq = 0;
 /** Unique-enough id. */
@@ -243,4 +246,39 @@ export function saveApiKey(key, remember) {
     return;
   }
   (remember ? ls : ss)?.setItem(KEY_API, clean);
+}
+
+/**
+ * Remembers the last forecast so the app still works if the air-quality
+ * service is unreachable.
+ * @param {{latitude: number, longitude: number}} place
+ * @param {object} json raw Open-Meteo response
+ * @param {number} [now]
+ */
+export function saveForecast(place, json, now = Date.now()) {
+  try {
+    safeStorage('localStorage')?.setItem(
+      KEY_FORECAST,
+      JSON.stringify({ lat: place.latitude, lon: place.longitude, at: now, json }),
+    );
+  } catch {
+    // Storage full or blocked: offline fallback is best-effort.
+  }
+}
+
+/**
+ * Returns a saved forecast for the same place if it is less than a day old.
+ * @param {{latitude: number, longitude: number}} place
+ * @param {number} [now]
+ * @returns {{json: any, at: number} | null}
+ */
+export function loadForecast(place, now = Date.now()) {
+  try {
+    const saved = JSON.parse(safeStorage('localStorage')?.getItem(KEY_FORECAST) ?? 'null');
+    const samePlace =
+      saved && Math.abs(saved.lat - place.latitude) < 0.01 && Math.abs(saved.lon - place.longitude) < 0.01;
+    return samePlace && now - saved.at < FORECAST_MAX_AGE_MS ? { json: saved.json, at: saved.at } : null;
+  } catch {
+    return null;
+  }
 }

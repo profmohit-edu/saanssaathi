@@ -9,13 +9,14 @@ import { buildEnvironment, parseOpenMeteo } from './environment.js';
 import { householdDose } from './exposure.js';
 import { rankSwaps } from './swaps.js';
 import { buildOfflinePlan } from './engine.js';
-import { loadState, saveState, demoState, newMember, loadPrefs } from './store.js';
+import { loadState, saveState, demoState, newMember, loadPrefs, saveForecast, loadForecast } from './store.js';
 import { placeLabel } from './format.js';
 import { MAX_MEMBERS, PERSIST_DEBOUNCE_MS, RECOMPUTE_DEBOUNCE_MS } from './config.js';
 import { initPlaceSearch, renderAir, showAirError, showAirLoading } from './ui/air-view.js';
 import { renderHome, renderMembers } from './ui/household-view.js';
 import { renderBudget, renderSwaps, renderPlan, renderGuidance } from './ui/results-view.js';
 import { initAssistant, openSettings, renderSuggestions } from './ui/assistant-view.js';
+import { initShare } from './ui/share.js';
 
 /** Number of top swaps pre-selected for the combined total. */
 const DEFAULT_SELECTED_SWAPS = 3;
@@ -29,6 +30,7 @@ const app = {
   selected: new Set(),
   chat: [],
   aiPlan: null,
+  lastPlan: null,
   busy: false,
 };
 
@@ -45,21 +47,39 @@ function recompute() {
   const offline = buildOfflinePlan(app.state, app.env, app.swaps);
   renderBudget(dose);
   renderSwaps(app);
-  renderPlan(app.aiPlan ?? offline);
+  app.lastPlan = app.aiPlan ?? offline;
+  renderPlan(app.lastPlan);
   renderGuidance(offline);
   renderSuggestions(ctx);
 }
 
-/** Fetches the forecast for the current place, then recomputes. */
+/**
+ * Builds the environment from a raw forecast and refreshes the screen.
+ * @param {any} json Open-Meteo response
+ * @param {string} [note] shown under the reading, e.g. for offline data
+ */
+function applyForecast(json, note) {
+  app.env = buildEnvironment(parseOpenMeteo(json), new Date());
+  renderAir(app.env, app.state.place, json.current, note);
+  recompute();
+}
+
+/** Fetches the forecast for the current place, falling back to the last saved one. */
 async function loadAir() {
-  showAirLoading(placeLabel(app.state.place));
+  const place = app.state.place;
+  showAirLoading(placeLabel(place));
   try {
-    const json = await fetchAirQuality(app.state.place.latitude, app.state.place.longitude);
-    app.env = buildEnvironment(parseOpenMeteo(json), new Date());
-    renderAir(app.env, app.state.place, json.current);
-    recompute();
+    const json = await fetchAirQuality(place.latitude, place.longitude);
+    saveForecast(place, json);
+    applyForecast(json);
   } catch (e) {
-    showAirError(/** @type {Error} */ (e).message, loadAir);
+    const saved = loadForecast(place);
+    if (saved) {
+      const time = new Date(saved.at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+      applyForecast(saved.json, `Offline: showing the forecast saved at ${time}.`);
+    } else {
+      showAirError(/** @type {Error} */ (e).message, loadAir);
+    }
   }
 }
 
@@ -121,6 +141,7 @@ function init() {
   renderMembers(ctx);
   byId('add-member').addEventListener('click', addMember);
   byId('demo-btn').addEventListener('click', loadDemo);
+  initShare(ctx);
   loadAir();
 }
 

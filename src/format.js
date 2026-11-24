@@ -61,3 +61,24 @@ export function forecastSummary(hours, cleanestLabel) {
   const range = `PM2.5 ranges from ${fmt(Math.min(...values))} to ${fmt(Math.max(...values))} µg/m³ over the next day.`;
   return cleanestLabel ? `${range} Cleanest window ${cleanestLabel}.` : range;
 }
+
+/**
+ * Plain-text version of a plan for sharing (WhatsApp, SMS, email).
+ * @param {import('./types.js').Plan} plan
+ * @param {string} place
+ * @param {string} [url] link back to the app
+ * @returns {string}
+ */
+export function planToText(plan, place, url = '') {
+  const lines = [`SaansSaathi clean-air plan for ${place}`, plan.headline, ''];
+  for (const s of plan.schedule) {
+    lines.push(`• ${s.time}: ${s.title}. ${s.detail}`);
+  }
+  for (const m of plan.perMember ?? []) {
+    lines.push(`• ${m.name}: ${m.advice}`);
+  }
+  if (url) {
+    lines.push('', `Plan yours: ${url}`);
+  }
+  return lines.filter((l, i) => l !== '' || lines[i - 1] !== '').join('\n');
+}

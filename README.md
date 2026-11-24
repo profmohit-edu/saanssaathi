@@ -6,7 +6,11 @@
 
 SaansSaathi ("breath companion" in Hindi: saans = breath, saathi = companion) is a generative-AI assistant that helps families get through winter smog. It does more than show a city AQI number. It estimates **how much PM2.5 each family member actually breathes in** over the next 24 hours, then ranks the choices that cut that dose most and explains the impact of each one in plain numbers.
 
-**Live app:** https://profmohit-edu.github.io/saanssaathi/
+**Live app:** https://profmohit-edu.github.io/saanssaathi/ · **Author:** [Prof. Mohit Tiwari](https://www.linkedin.com/in/mtiw/), Assistant Professor, Computer Science, Bharati Vidyapeeth's College of Engineering, New Delhi
+
+| Air & clean-air window | Swap simulator (dark mode) | Mobile |
+|---|---|---|
+| ![Live PM2.5, NAQI band and the cleanest 2-hour window](assets/screenshot-desktop.png) | ![Ranked swaps with per-person impact](assets/screenshot-dark.png) | ![Mobile layout](assets/screenshot-mobile.png) |
 
 ## What makes it different
 
@@ -31,11 +35,25 @@ SaansSaathi ("breath companion" in Hindi: saans = breath, saathi = companion) is
 
 ## Generative AI usage
 
-* **Google Gemini** (`gemini-3.6-flash` by default, configurable) through the Generative Language REST API:
-  * `src/gemini.js` → `generatePlan()` uses `responseMimeType: application/json` and a `responseSchema` to produce a validated day plan in the user's language.
-  * `src/gemini.js` → `ask()` runs a multi-turn chat grounded in a compact JSON context (forecast, per-person dose, ranked swaps) so the model explains real figures instead of making them up.
-  * A system instruction enforces grounding, no diagnosis, cost-aware advice and resistance to prompt injection.
-* The app was built with AI-assisted, intent-driven development.
+SaansSaathi picks the best AI available, so every visitor gets AI help:
+
+```mermaid
+flowchart LR
+  A[Live CAMS forecast] --> M[Exposure model<br/>per-person dose, ranked swaps]
+  H[Household profile] --> M
+  M --> C[Grounding JSON]
+  C -->|key saved| G[Gemini API<br/>structured JSON plan + chat]
+  C -->|no key, Chrome| N[Gemini Nano on-device<br/>Prompt API + JSON schema]
+  N --> T[Chrome Translator API<br/>Hindi, Bengali, Tamil...]
+  C -->|no AI available| O[Offline rule-based planner]
+```
+
+* **Gemini API** (`gemini-3.6-flash` by default, configurable) in `src/gemini.js`:
+  * `generatePlan()` uses `responseMimeType: application/json` and a `responseSchema` to produce a validated day plan in the user's language.
+  * `ask()` runs a multi-turn chat grounded in a compact JSON context (forecast, per-person dose, ranked swaps), so the model explains real figures instead of making them up.
+* **Gemini Nano, built into Chrome** (`src/ai/nano.js`): the same plan and chat run on the device through the Prompt API, with a JSON-schema `responseConstraint`. The Translator API then turns the answer into Indian languages on the device. No key, no server, no data leaves the browser.
+* `src/ai/provider.js` chooses between cloud, on-device and offline, and the page shows which one is active.
+* A shared system instruction enforces grounding, no diagnosis, cost-aware advice and resistance to prompt injection.
 
 ## Architecture
 
@@ -59,12 +77,15 @@ src/
   swaps.js              what-if simulator & ranking
   engine.js             offline planner, rule-based health alerts, hacks, myths
   gemini.js             Gemini prompts, schema, REST client, parsing
+  ai/nano.js            on-device Gemini Nano + Translator (no key)
+  ai/provider.js        picks cloud / on-device / offline
+  ui/share.js           share plan via share sheet or WhatsApp
   aqi.js                NAQI + US EPA (2024) PM2.5 indices
   local.js              city tailoring: metro availability, complaint channels
   chart.js              dependency-free SVG chart + table
   dom.js                XSS-safe DOM builder & rich-text tokenizer
   store.js              validated persistence (localStorage / sessionStorage)
-tests/                  61 node:test unit tests, no runtime dependencies
+tests/                  75 unit tests (node:test) + 5 end-to-end browser tests (Playwright)
 ```
 
 The model layer (`exposure`, `swaps`, `environment`, `engine`, `gemini`) has no DOM code and is unit-tested directly. Views only render state and report edits back to the controller through a small `actions` interface.
@@ -79,9 +100,10 @@ No framework, no build step and no runtime dependencies. The page is under 100 K
 | Formatting | Prettier | `npm run format:check` |
 | Static types (strict, `checkJs`) | TypeScript | `npm run typecheck` |
 | Unit tests + coverage | `node:test` | `npm run test:coverage` |
+| End-to-end (real Chromium) | Playwright | `npm run test:e2e` |
 | Everything | | `npm run check` |
 
-GitHub Actions runs all four on every push.
+GitHub Actions runs all of them on every push.
 
 ### The exposure model
 
@@ -94,6 +116,14 @@ GitHub Actions runs all four on every push.
 * Cigarette equivalent: Berkeley Earth's rule of thumb, 22 µg/m³ for a day ≈ 1 cigarette (330 µg inhaled).
 
 These figures are estimates for ranking choices, not medical measurements.
+
+### References
+
+* US EPA, [Exposure Factors Handbook, Chapter 6: Inhalation Rates](https://www.epa.gov/expobox/exposure-factors-handbook-chapter-6)
+* Berkeley Earth, [Air Pollution and Cigarette Equivalence](https://berkeleyearth.org/air-pollution-and-cigarette-equivalence/)
+* WHO, [Global Air Quality Guidelines (2021)](https://www.who.int/publications/i/item/9789240034228)
+* Central Pollution Control Board, [National Air Quality Index](https://cpcb.nic.in/)
+* Copernicus Atmosphere Monitoring Service via [Open-Meteo Air Quality API](https://open-meteo.com/en/docs/air-quality-api)
 
 ## Security
 
@@ -114,7 +144,8 @@ Skip link, landmarks, labelled form controls, `aria-live` result regions, keyboa
 
 ```bash
 npm install       # dev tools only: eslint, prettier, typescript
-npm run check     # lint + format + types + 61 unit tests
+npm run check     # lint + format + types + unit tests
+npm run test:e2e  # browser tests (after: npx playwright install chromium)
 npm start         # serves on http://localhost:8080
 ```
 

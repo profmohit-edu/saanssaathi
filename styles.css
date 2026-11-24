@@ -48,7 +48,7 @@ p { margin: .4rem 0; }
 .nav { display: flex; gap: .9rem; margin-left: auto; flex-wrap: wrap; }
 .nav a { color: #dfe6ff; text-decoration: none; font-size: .92rem; }
 .nav a:hover { color: #fff; text-decoration: underline; }
-.site-header .btn.ghost { color: #fff; border-color: rgba(255, 255, 255, .4); }
+.site-header .btn.ghost { color: #fff; border-color: rgba(255, 255, 255, .4); white-space: nowrap; }
 @media (max-width: 820px) { .nav { display: none; } .header-inner .btn { margin-left: auto; } }
 
 /* Hero */
@@ -230,3 +230,44 @@ dialog input { margin-bottom: .8rem; }
 .community li { background: #f2f7f3; border-radius: 12px; padding: .8rem 1rem; }
 .ai-mode { display: inline-block; font-size: .85rem; font-weight: 600; padding: .2rem .7rem; border-radius: 999px; background: #eef1f8; color: var(--ink-2); margin: 0 0 .3rem; }
 .ai-mode[data-provider="nano"], .ai-mode[data-provider="cloud"] { background: #e3f4e8; color: var(--good); }
+.offline-note { color: var(--accent-ink); font-weight: 600; }
+.credit { margin-top: .6rem; }
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --ink: #e8ecf5;
+    --ink-2: #c4cbdb;
+    --muted: #a3acc0;
+    --bg: #10141f;
+    --card: #182033;
+    --line: #2b3550;
+    --accent-ink: #ffb26b;
+    --sky: #8fb2ff;
+    --good: #5fd08a;
+    --bad: #ff8a80;
+  }
+  input[type=text], input[type=search], input[type=number], input[type=password], select {
+    background: #0f1524; color: var(--ink); border-color: #3a4566; }
+  .btn { background: #e8ecf5; color: #10141f; border-color: #e8ecf5; }
+  .btn.ghost { color: var(--ink); border-color: var(--line); background: transparent; }
+  .home-settings, .chip-btn { background: #121a2b; }
+  .chip:has(input:checked) { background: #2a2016; }
+  .place-results { background: var(--card); }
+  .place-results li:hover, .place-results li:focus { background: #2a2016; }
+  .bubble.model { background: #222c44; }
+  .bubble.user { background: #3a5ba9; }
+  .alert { background: #2a2016; }
+  .alert.high { background: #3a1c1c; }
+  .impact-story, .community li { background: #13261b; }
+  .who-x.over { background: #3a1c1c; }
+  .who-x.ok { background: #13261b; }
+  .tag, .ai-mode { background: #222c44; color: var(--ink-2); }
+  .stack { background: #222c44; }
+  .chart .grid { stroke: #2b3550; }
+  .chart .axis { fill: #a3acc0; }
+  .hero h1 em { background: linear-gradient(transparent 62%, #6b3d12 62%); }
+  dialog { background: var(--card); }
+  .step { color: var(--bg); }
+}

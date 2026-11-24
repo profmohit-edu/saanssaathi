@@ -25,6 +25,7 @@ const browser = Object.fromEntries(
     'localStorage',
     'sessionStorage',
     'NodeFilter',
+    'window',
     'EventTarget',
     'Event',
   ].map((g) => [g, 'readonly']),
@@ -32,6 +33,10 @@ const browser = Object.fromEntries(
 
 export default [
   { ignores: ['node_modules/**', 'coverage/**'] },
+  {
+    files: ['tests/**/*.js'],
+    languageOptions: { globals: { process: 'readonly', URL: 'readonly' } },
+  },
   {
     files: ['**/*.js'],
     languageOptions: { ecmaVersion: 2024, sourceType: 'module', globals: browser },

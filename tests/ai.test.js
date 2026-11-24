@@ -235,7 +235,8 @@ test('a stuck on-device prompt is aborted after the timeout', async () => {
   const stuck = {
     prompt: (_text, opts) => {
       signal = opts.signal;
-      return new Promise(() => {});
+      // Like Chrome, reject with the abort reason when the signal fires.
+      return new Promise((_, reject) => opts.signal.addEventListener('abort', () => reject(opts.signal.reason)));
     },
   };
   await assert.rejects(promptWithTimeout(stuck, 'hi', 20), /took too long/);

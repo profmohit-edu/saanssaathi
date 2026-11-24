@@ -41,8 +41,9 @@ export function showAirError(message, onRetry) {
  * @param {import('../types.js').Environment} env
  * @param {import('../types.js').Place} place
  * @param {{pm10?: number, nitrogen_dioxide?: number}} [current] raw current readings
+ * @param {string} [note] status note, e.g. offline data
  */
-export function renderAir(env, place, current = {}) {
+export function renderAir(env, place, current = {}, note = '') {
   const band = bandForPm25(env.current);
   const best = env.bestFor(CLEAN_WINDOW_HOURS);
   const out = byId('air-now');
@@ -62,6 +63,7 @@ export function renderAir(env, place, current = {}) {
         'div',
         { class: 'air-facts' },
         h('p', { class: 'place' }, placeLabel(place)),
+        note && h('p', { class: 'offline-note', role: 'status' }, note),
         h('p', {}, band.advice),
         h(
           'ul',

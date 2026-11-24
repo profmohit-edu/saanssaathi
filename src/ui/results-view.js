@@ -242,6 +242,8 @@ function timeline(schedule) {
 
 const PLAN_NOTES = Object.freeze({
   gemini: 'Written by Gemini from your numbers. Check medical advice with a doctor.',
+  'gemini-nano':
+    'Written by Gemini Nano on this device from your numbers; nothing left your browser. Check medical advice with a doctor.',
   offline:
     'This is SaansSaathi\'s built-in plan. Use "Personalise with Gemini" for advice written for each person, in your language.',
 });
@@ -252,7 +254,7 @@ const PLAN_NOTES = Object.freeze({
  */
 export function renderPlan(plan) {
   const out = byId('plan-out');
-  out.setAttribute('lang', plan.source === 'gemini' ? plan.lang || 'en' : 'en');
+  out.setAttribute('lang', plan.source === 'offline' ? 'en' : plan.lang || 'en');
   mount(
     out,
     plan.headline && h('p', { class: 'plan-headline' }, plan.headline),

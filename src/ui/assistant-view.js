@@ -1,15 +1,16 @@
 /**
- * Gemini features: personalised plan, grounded chat, suggested questions
- * and the settings dialog.
+ * AI features: personalised plan, grounded chat, suggested questions, the
+ * active-backend badge and the settings dialog.
  * @module ui/assistant-view
  */
 import { h, mount, byId, richText } from '../dom.js';
 import { householdDose, AGE_GROUPS } from '../exposure.js';
 import { buildOfflinePlan } from '../engine.js';
-import { buildContext, generatePlan, ask, LANGUAGES } from '../gemini.js';
+import { buildContext, LANGUAGES } from '../gemini.js';
+import { resolveProvider, planWith, askWith, PROVIDER_LABELS } from '../ai/provider.js';
 import { loadApiKey, saveApiKey, savePrefs } from '../store.js';
 import { placeLabel } from '../format.js';
-import { DEFAULT_MODEL, isValidModel } from '../config.js';
+import { isValidModel } from '../config.js';
 import { renderPlan } from './results-view.js';
 
 /**
@@ -23,19 +24,30 @@ function contextFor(app) {
 }
 
 /**
- * Returns the saved key, or opens Settings and returns null.
+ * Picks the AI backend for this request. With no key and no on-device model,
+ * opens Settings and returns null.
  * @param {import('../types.js').AppContext} ctx
  */
-function requireKey({ actions }) {
-  const key = loadApiKey();
-  if (!key) {
+async function chooseBackend({ app, actions }) {
+  const apiKey = loadApiKey();
+  const provider = await resolveProvider(apiKey);
+  if (provider === 'none') {
     actions.openSettings();
+    return null;
   }
-  return key || null;
+  return { provider, apiKey, model: app.prefs.model, lang: app.prefs.lang };
 }
 
 /**
- * Asks Gemini for a structured plan and renders it.
+ * Status updates while Chrome downloads Gemini Nano the first time.
+ * @param {HTMLElement} status
+ */
+const progressTo = (status) => (/** @type {number} */ f) => {
+  status.textContent = `Downloading Gemini Nano to this device… ${Math.round(f * 100)}% (one time only)`;
+};
+
+/**
+ * Generates the personalised plan with the best available AI and renders it.
  * @param {import('../types.js').AppContext} ctx
  */
 async function onGeneratePlan(ctx) {
@@ -43,26 +55,21 @@ async function onGeneratePlan(ctx) {
   if (!app.env || app.busy) {
     return;
   }
-  const key = requireKey(ctx);
-  if (!key) {
+  const backend = await chooseBackend(ctx);
+  if (!backend) {
     return;
   }
   const status = byId('plan-status');
   const btn = /** @type {HTMLButtonElement} */ (byId('gen-plan'));
   app.busy = true;
   btn.disabled = true;
-  status.textContent = "Gemini is writing your family's plan…";
+  status.textContent = `${PROVIDER_LABELS[backend.provider]} is writing your family's plan…`;
   try {
-    const plan = await generatePlan({
-      apiKey: key,
-      model: app.prefs.model || DEFAULT_MODEL,
-      context: contextFor(app),
-      lang: app.prefs.lang,
-    });
+    const plan = await planWith({ ...backend, context: contextFor(app), onProgress: progressTo(status) });
     const { alerts } = buildOfflinePlan(app.state, app.env, app.swaps);
-    app.aiPlan = { ...plan, source: 'gemini', alerts, lang: app.prefs.lang };
+    app.aiPlan = { ...plan, alerts };
     renderPlan(app.aiPlan);
-    status.textContent = 'Plan ready.';
+    status.textContent = `Plan ready, written by ${PROVIDER_LABELS[backend.provider]}.`;
   } catch (e) {
     status.textContent = `${/** @type {Error} */ (e).message} Showing the built-in plan instead.`;
   } finally {
@@ -90,7 +97,7 @@ function addBubble(role, text, lang) {
 }
 
 /**
- * Sends a question to Gemini, grounded in the household's numbers.
+ * Answers a question with the best available AI, grounded in the household's numbers.
  * @param {import('../types.js').AppContext} ctx
  * @param {string} question
  */
@@ -100,8 +107,8 @@ async function onAsk(ctx, question) {
   if (!q || !app.env || app.busy) {
     return;
   }
-  const key = requireKey(ctx);
-  if (!key) {
+  const backend = await chooseBackend(ctx);
+  if (!backend) {
     return;
   }
   app.busy = true;
@@ -109,13 +116,14 @@ async function onAsk(ctx, question) {
   const pending = h('div', { class: 'bubble model pending' }, 'Thinking…');
   byId('chat-log').append(pending);
   try {
-    const answer = await ask({
-      apiKey: key,
-      model: app.prefs.model || DEFAULT_MODEL,
+    const answer = await askWith({
+      ...backend,
       context: contextFor(app),
-      lang: app.prefs.lang,
       history: app.chat,
       question: q,
+      onProgress: (f) => {
+        pending.textContent = `Downloading Gemini Nano… ${Math.round(f * 100)}%`;
+      },
     });
     addBubble('model', answer, app.prefs.lang);
     app.chat.push({ role: 'user', text: q }, { role: 'model', text: answer });
@@ -125,6 +133,17 @@ async function onAsk(ctx, question) {
     pending.remove();
     app.busy = false;
   }
+}
+
+/**
+ * Shows which AI backend is active next to the plan button.
+ * @returns {Promise<void>}
+ */
+export async function renderAiMode() {
+  const provider = await resolveProvider(loadApiKey());
+  const badge = byId('ai-mode');
+  badge.textContent = `AI: ${PROVIDER_LABELS[provider]}`;
+  badge.dataset.provider = provider;
 }
 
 /**
@@ -196,7 +215,8 @@ export function initAssistant(ctx) {
     saveApiKey(key, remember);
     app.prefs.model = isValidModel(model) ? model : '';
     savePrefs(app.prefs);
-    byId('plan-status').textContent = key.trim() ? 'Gemini key saved. AI features are on.' : 'Gemini key removed.';
+    byId('plan-status').textContent = key.trim() ? 'Gemini key saved. Cloud AI is on.' : 'Gemini key removed.';
+    renderAiMode();
   });
 
   const lang = /** @type {HTMLSelectElement} */ (byId('lang'));
@@ -208,4 +228,5 @@ export function initAssistant(ctx) {
     app.prefs.lang = lang.value;
     savePrefs(app.prefs);
   });
+  renderAiMode();
 }

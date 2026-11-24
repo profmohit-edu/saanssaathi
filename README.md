@@ -107,7 +107,7 @@ src/
   dom.js                XSS-safe DOM builder and typed lookups
   chart.js              dependency-free SVG chart + data table
   ui/                   air, household, results, assistant and share views
-tests/                  81 unit tests (node:test) + 5 browser tests (Playwright)
+tests/                  82 unit tests (node:test) + 5 browser tests (Playwright)
 ```
 
 The model layer has no DOM code and is unit-tested directly. Views only render state and report edits to the controller through a small `actions` interface. There is no framework, no build step and no runtime dependency.
@@ -116,7 +116,7 @@ The model layer has no DOM code and is unit-tested directly. Views only render s
 
 | Check | Tool | Command |
 |---|---|---|
-| Lint (complexity ≤ 12, ≤ 250 lines per file) | ESLint | `npm run lint` |
+| Lint (complexity ≤ 8, ≤ 45 lines per function, ≤ 4 parameters, ≤ 250 lines per file) | ESLint | `npm run lint` |
 | Formatting | Prettier | `npm run format:check` |
 | Static types (strict `checkJs`) | TypeScript | `npm run typecheck` |
 | Unit tests with coverage | `node:test` | `npm run test:coverage` |

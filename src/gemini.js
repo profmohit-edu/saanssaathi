@@ -29,6 +29,7 @@ export const SYSTEM_INSTRUCTION = [
   'Ground every claim in the JSON context you are given (forecast, per-person inhaled dose, ranked swaps).',
   'Quote the numbers you are given. Never invent pollution readings or clock times; use only the local times in the context.',
   'Never recommend air fresheners, incense, candles, ozone generators or ionisers: they add indoor pollution.',
+  'PM2.5 values are concentrations in µg/m³; inhaledUgPerDay is a daily dose in µg. Never compare a dose with the WHO guideline: use timesWhoGuideline for that.',
   'Explain cause and effect plainly: what each choice changes and by how much.',
   'Be specific to each named family member, their age, conditions and routine.',
   'You are not a doctor: for symptoms, advise seeing a clinician. Never diagnose or prescribe.',
@@ -82,7 +83,7 @@ export function buildContext({ place, env, state, dose, swaps }) {
       rushHourMean: r(env.commuteMean),
       worstWindowLocal: env.peak && { time: formatRange(env.peak.start, env.peak.end), mean: r(env.peak.mean) },
       cleanestWindowLocal: best2 && { time: formatRange(best2.start, best2.end), mean: r(best2.mean) },
-      whoDailyGuideline: 15,
+      whoGuideline24hUgPerM3: 15,
     },
     home: state.home,
     members: state.members.map((m, i) => ({

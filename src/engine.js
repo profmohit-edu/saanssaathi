@@ -234,6 +234,10 @@ export function buildOfflinePlan(state, env, swaps) {
   };
 }
 
+/**
+ * Sort key for a plan item: all-day first, then clock times, then commute and bedtime.
+ * @param {string} timeLabel
+ */
 function order(timeLabel) {
   if (timeLabel === 'All day') {
     return -1;

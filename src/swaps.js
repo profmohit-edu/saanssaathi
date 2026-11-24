@@ -135,10 +135,19 @@ const SWITCHABLE = ['two_wheeler', 'auto', 'car_open', 'car_recirc'];
 /** Metro by default when the city is unknown (tests, demo). */
 const metroFor = (s) => !s.place || hasMetro(s.place);
 
+/**
+ * True when the member commutes in the open air (no sealed cabin).
+ * @param {import('./types.js').Member} m
+ */
 function openCommute(m) {
   return ['two_wheeler', 'auto', 'walk', 'cycle', 'bus', 'car_open'].includes(m.commuteMode) && m.commuteHours > 0;
 }
 
+/**
+ * Swap title for removing an indoor pollution source.
+ * @param {string} key indoor source key
+ * @param {string} label fallback label
+ */
 function sourceTitle(key, label) {
   const map = {
     biomass: 'Switch wood/dung/coal cooking or heating to LPG or induction',
@@ -151,6 +160,10 @@ function sourceTitle(key, label) {
   return map[key] ?? `Remove: ${label}`;
 }
 
+/**
+ * Rough cost note for removing an indoor source.
+ * @param {string} key indoor source key
+ */
 function sourceCost(key) {
   return (
     {
@@ -164,6 +177,10 @@ function sourceCost(key) {
   );
 }
 
+/**
+ * Short reason why removing this indoor source matters.
+ * @param {string} key indoor source key
+ */
 function sourceWhy(key) {
   return (
     {

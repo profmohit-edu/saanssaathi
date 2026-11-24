@@ -134,6 +134,7 @@ function loadDemo() {
   }
 }
 
+/** Wires every view to the shared context and loads the first forecast. */
 function init() {
   initAssistant(ctx);
   initPlaceSearch(ctx);

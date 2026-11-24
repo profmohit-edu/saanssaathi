@@ -143,6 +143,10 @@ export function tokenizeRichText(text) {
   return blocks;
 }
 
+/**
+ * Turns **bold** spans in one line of model text into <strong> nodes; everything else stays text.
+ * @param {string} s
+ */
 function inline(s) {
   return s
     .split(/(\*\*[^*]+\*\*)/g)

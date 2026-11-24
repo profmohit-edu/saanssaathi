@@ -185,6 +185,11 @@ export function sanitizeState(raw) {
   };
 }
 
+/**
+ * Returns a working Web Storage area, or null when storage is blocked (private mode, quota).
+ * @param {'localStorage' | 'sessionStorage'} kind
+ * @returns {Storage | null}
+ */
 function safeStorage(kind) {
   try {
     const s = globalThis[kind];

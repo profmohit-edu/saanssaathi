@@ -141,6 +141,7 @@ test('with a Gemini key, the plan comes from Gemini and the key goes in a header
 
 test('the chat answers a suggested question through Gemini', async () => {
   const { page, ctx } = await openApp();
+  await page.waitForSelector('.swap');
   await page.waitForSelector('#suggestions button');
   await useStubbedGemini(page);
   await page.locator('#suggestions button').first().click();
@@ -151,7 +152,7 @@ test('the chat answers a suggested question through Gemini', async () => {
 
 test('model text is rendered as text, never as HTML', async () => {
   const { page, ctx } = await openApp();
-  await page.waitForSelector('#chat-input');
+  await page.waitForSelector('.swap'); // forecast loaded, so the chat can answer
   await page.route('https://generativelanguage.googleapis.com/**', (route) =>
     fulfillJson(route, geminiReply('<img src=x onerror="window.__pwned=1"> **safe**')),
   );

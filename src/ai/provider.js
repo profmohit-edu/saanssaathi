@@ -83,19 +83,20 @@ export function resetNanoCache() {
  */
 
 /**
- * Generates the day plan with the chosen backend.
- * @param {RunOptions} o
+ * Generates the day plan with the chosen backend. Rule-based health alerts are
+ * attached, and translated with the rest of an on-device plan.
+ * @param {RunOptions & {alerts?: import('../types.js').Plan['alerts']}} o
  * @returns {Promise<import('../types.js').Plan>}
  */
-export async function planWith({ provider, apiKey, model, context, lang, onProgress, ai, fetchImpl }) {
+export async function planWith({ provider, apiKey, model, context, lang, onProgress, ai, fetchImpl, alerts = [] }) {
   if (provider === 'cloud') {
     const plan = await generatePlan({ apiKey, model: model || DEFAULT_MODEL, context, lang, fetchImpl });
-    return { ...plan, source: 'gemini', lang };
+    return { ...plan, alerts, source: 'gemini', lang };
   }
   if (provider === 'nano') {
     warmTranslator(lang, ai); // start language-pack download while the click still counts
     const session = await nanoSessionFor(context, onProgress, ai);
-    return translatePlan(await nanoPlan(session, context), lang, ai);
+    return translatePlan({ ...(await nanoPlan(session, context)), alerts }, lang, ai);
   }
   throw new Error('No AI backend available.');
 }

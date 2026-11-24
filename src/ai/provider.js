@@ -45,7 +45,7 @@ export async function resolveProvider(apiKey, ai = browserAI()) {
  * Caches one Nano session per household context, so chat keeps its history
  * until the household changes.
  */
-const nanoCache = { key: '', session: /** @type {any} */ (null) };
+const nanoCache = { key: '', session: /** @type {import('./nano.js').NanoSession | null} */ (null) };
 
 /**
  * @param {object} context

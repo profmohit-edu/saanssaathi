@@ -40,14 +40,32 @@ export const NANO_PLAN_SCHEMA = Object.freeze({
 });
 
 /**
- * @typedef {object} BuiltInAI
- * @property {any} [LanguageModel] Chrome Prompt API
- * @property {any} [Translator] Chrome Translator API
+ * @typedef {object} NanoSession A Gemini Nano conversation (Chrome Prompt API).
+ * @property {(text: string, opts?: object) => Promise<string>} prompt
+ * @property {() => void} [destroy]
  */
 
-/** @returns {BuiltInAI} the real browser globals */
+/**
+ * @typedef {object} LanguageModelAPI Chrome Prompt API entry point.
+ * @property {(opts: object) => Promise<string>} [availability]
+ * @property {(opts: object) => Promise<NanoSession>} [create]
+ */
+
+/**
+ * @typedef {object} TranslatorAPI Chrome Translator API entry point.
+ * @property {(pair: object) => Promise<string>} [availability]
+ * @property {(pair: object) => Promise<{translate: (text: string) => Promise<string>}>} [create]
+ */
+
+/**
+ * @typedef {object} BuiltInAI
+ * @property {LanguageModelAPI} [LanguageModel] Chrome Prompt API
+ * @property {TranslatorAPI} [Translator] Chrome Translator API
+ */
+
+/** @returns {BuiltInAI} the real browser globals (absent in most browsers) */
 export function browserAI() {
-  const g = /** @type {any} */ (globalThis);
+  const g = /** @type {BuiltInAI} */ (/** @type {unknown} */ (globalThis));
   return { LanguageModel: g.LanguageModel, Translator: g.Translator };
 }
 
@@ -89,18 +107,20 @@ export async function createNanoSession({ context, onProgress, ai = browserAI() 
     expectedInputs: [{ type: 'text', languages: [NANO_LANG] }],
     expectedOutputs: [{ type: 'text', languages: [NANO_LANG] }],
     monitor(/** @type {EventTarget} */ m) {
-      m.addEventListener('downloadprogress', (/** @type {any} */ e) => onProgress?.(Number(e.loaded) || 0));
+      m.addEventListener('downloadprogress', (/** @type {Event & {loaded?: number}} */ e) =>
+        onProgress?.(Number(e.loaded) || 0),
+      );
     },
   });
 }
 
 /**
  * Writes the plan on-device with a JSON-schema constraint.
- * @param {{prompt: (text: string, opts?: object) => Promise<string>}} session
- * @param {object} context
+ * @param {NanoSession} session
+ * @param {ReturnType<typeof import('../gemini.js').buildContext>} context
  */
 export async function nanoPlan(session, context) {
-  const text = await session.prompt(buildPlanPrompt(/** @type {any} */ (context), NANO_LANG, { compact: true }), {
+  const text = await session.prompt(buildPlanPrompt(context, NANO_LANG, { compact: true }), {
     responseConstraint: NANO_PLAN_SCHEMA,
   });
   return { ...parsePlan(text), source: /** @type {const} */ ('gemini-nano') };
@@ -127,13 +147,15 @@ const translators = new Map();
  * @returns {Promise<{translate: (s: string) => Promise<string>} | null>}
  */
 export function warmTranslator(target, ai = browserAI()) {
-  if (target === 'en' || !ai.Translator?.create) {
+  const api = ai.Translator;
+  if (target === 'en' || !api?.create) {
     return Promise.resolve(null);
   }
   if (!translators.has(target)) {
     const pair = { sourceLanguage: 'en', targetLanguage: target };
-    const ready = Promise.resolve(ai.Translator.availability(pair))
-      .then((status) => (status === 'unavailable' ? null : ai.Translator.create(pair)))
+    const ready = Promise.resolve()
+      .then(() => (api.availability ? api.availability(pair) : 'available'))
+      .then((status) => (status === 'unavailable' || !api.create ? null : api.create(pair)))
       .catch(() => null)
       .then((translator) => {
         if (!translator) {

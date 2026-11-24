@@ -84,7 +84,7 @@
 
 /**
  * @typedef {object} Plan
- * @property {'offline'|'gemini'} source
+ * @property {'offline'|'gemini'|'gemini-nano'} source
  * @property {string} headline
  * @property {Array<{time: string, title: string, detail: string}>} schedule
  * @property {Array<{who: string, level: string, text: string}>} [alerts]

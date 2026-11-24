@@ -39,7 +39,7 @@ test('context carries computed numbers for grounding', () => {
   assert.equal(ctx.members.length, 2);
   assert.ok(ctx.members[0].inhaledUgPerDay > 0);
   assert.ok(ctx.rankedSwaps.length > 0);
-  assert.equal(ctx.pm25.whoDailyGuideline, 15);
+  assert.equal(ctx.pm25.whoGuideline24hUgPerM3, 15);
 });
 
 test('plan prompt names the language and embeds context', () => {

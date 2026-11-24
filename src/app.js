@@ -244,7 +244,7 @@ function renderBudget(dose) {
       h('div', { class: 'budget-meta' },
         h('span', { class: 'who' }, d.name),
         h('span', { class: 'num' }, `${fmt(d.total)} µg`),
-        h('span', { class: 'cig', title: 'Cigarette equivalent' }, `🚬 ${fmt(d.cigarettes, 1)}`),
+        h('span', { class: 'cig', title: 'Cigarette equivalent' }, `${fmt(d.cigarettes, 1)} cig. eq.`),
         h('span', { class: `who-x ${d.whoMultiple > 1 ? 'over' : 'ok'}` }, `${fmt(d.whoMultiple, 1)}× WHO`)),
       h('div', { class: 'stack', role: 'img',
         'aria-label': `${d.name}: ` + Object.entries(d.parts).map(([k, v]) => `${PART_LABELS[k]} ${fmt(v)} µg`).join(', ') },
@@ -260,7 +260,7 @@ function renderBudget(dose) {
 function renderSwaps() {
   const list = $('#swap-list');
   if (!app.swaps.length) {
-    mount(list, h('li', { class: 'empty' }, 'Your household is already doing everything SaansSaathi would suggest. 🎉'));
+    mount(list, h('li', { class: 'empty' }, 'Your household is already doing everything SaansSaathi would suggest.'));
     renderSwapTotal();
     return;
   }
@@ -278,7 +278,7 @@ function renderSwaps() {
         h('p', { class: 'swap-impact' },
           s.deltaUg > 0.5 && h('strong', {}, `−${fmt(s.pct)}% family dose`),
           s.deltaUg > 0.5 && ` · ≈ ${fmt(s.cigarettesPerWeek, 1)} cigarettes avoided / week`,
-          s.co2KgPerWeek > 0.05 && ` · 🌱 ${fmt(s.co2KgPerWeek, 1)} kg CO₂ less / week`),
+          s.co2KgPerWeek > 0.05 && ` · ${fmt(s.co2KgPerWeek, 1)} kg CO₂ less / week`),
         top.length > 0 && h('p', { class: 'swap-who' }, top.map((p) => `${p.name} −${fmt(p.pct)}%`).join(' · ')),
         h('p', { class: 'swap-why' }, s.why),
         h('p', { class: 'swap-cost' }, h('span', { class: 'tag' }, s.category), ' ', s.cost)));
@@ -322,7 +322,7 @@ function renderPlan(plan) {
       h('ul', {}, plan.perMember.map((m) => h('li', {}, h('strong', {}, `${m.name}: `), m.advice)))),
     plan.impactStory && h('div', { class: 'impact-story' }, h('h3', {}, 'What changes if you act'), richText(plan.impactStory)),
     plan.source === 'offline' && h('p', { class: 'hint' }, 'This is SaansSaathi\'s built-in plan. Use "Personalise with Gemini" for advice written for each person, in your language.'),
-    plan.source === 'gemini' && h('p', { class: 'hint' }, '✨ Written by Gemini from your numbers. Check medical advice with a doctor.'));
+    plan.source === 'gemini' && h('p', { class: 'hint' }, 'Written by Gemini from your numbers. Check medical advice with a doctor.'));
 }
 
 function renderStatic(plan) {
@@ -397,7 +397,7 @@ async function onAsk(question) {
     app.chat.push({ role: 'user', text: q }, { role: 'model', text: answer });
   } catch (e) {
     pending.remove();
-    addChat('model', `⚠️ ${e.message}`);
+    addChat('model', `Error: ${e.message}`);
   } finally {
     app.busy = false;
   }

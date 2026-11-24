@@ -5,7 +5,7 @@
  * @module ui/results-view
  */
 import { h, mount, byId, richText } from '../dom.js';
-import { UG_PER_CIGARETTE } from '../exposure.js';
+import { UG_PER_CIGARETTE, lookup } from '../exposure.js';
 import { combine } from '../swaps.js';
 import { MYTHS } from '../engine.js';
 import { fmt } from '../format.js';
@@ -26,7 +26,7 @@ export const PART_LABELS = Object.freeze({
  */
 function doseBar(d, max) {
   const label = Object.entries(d.parts)
-    .map(([k, v]) => `${PART_LABELS[/** @type {keyof typeof PART_LABELS} */ (k)]} ${fmt(v)} µg`)
+    .map(([k, v]) => `${lookup(PART_LABELS, k)} ${fmt(v)} µg`)
     .join(', ');
   return h(
     'div',
@@ -36,7 +36,7 @@ function doseBar(d, max) {
       .map(([k, v]) => {
         const seg = h('span', {
           class: `seg seg-${k}`,
-          title: `${PART_LABELS[/** @type {keyof typeof PART_LABELS} */ (k)]}: ${fmt(v)} µg`,
+          title: `${lookup(PART_LABELS, k)}: ${fmt(v)} µg`,
         });
         seg.style.width = `${(v / max) * 100}%`;
         return seg;
@@ -96,7 +96,7 @@ export function renderBudget(dose) {
  * @param {(checked: boolean) => void} onToggle
  */
 function swapItem(s, rank, checked, onToggle) {
-  const cb = /** @type {HTMLInputElement} */ (h('input', { type: 'checkbox', id: `swap-${s.id}`, checked }));
+  const cb = h('input', { type: 'checkbox', id: `swap-${s.id}`, checked });
   cb.addEventListener('change', () => onToggle(cb.checked));
   const top = s.perMember
     .filter((p) => p.pct >= 1)

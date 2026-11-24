@@ -3,8 +3,8 @@
  * active-backend badge and the settings dialog.
  * @module ui/assistant-view
  */
-import { h, mount, byId, richText } from '../dom.js';
-import { householdDose, AGE_GROUPS } from '../exposure.js';
+import { h, mount, byId, richText, inputById, selectById, buttonById, dialogById, errorMessage } from '../dom.js';
+import { householdDose, AGE_GROUPS, lookup } from '../exposure.js';
 import { buildOfflinePlan } from '../engine.js';
 import { buildContext, LANGUAGES } from '../gemini.js';
 import { resolveProvider, planWith, askWith, PROVIDER_LABELS } from '../ai/provider.js';
@@ -17,9 +17,9 @@ import { renderPlan } from './results-view.js';
 /**
  * Grounding context for Gemini built from the current state.
  * @param {import('../types.js').AppState} app
+ * @param {import('../types.js').Environment} env
  */
-function contextFor(app) {
-  const env = /** @type {import('../types.js').Environment} */ (app.env);
+function contextFor(app, env) {
   const dose = householdDose(app.state.members, app.state.home, env);
   return buildContext({ place: placeLabel(app.state.place), env, state: app.state, dose, swaps: app.swaps });
 }
@@ -43,11 +43,11 @@ async function chooseBackend({ app, actions }) {
  * Status updates while Chrome downloads Gemini Nano the first time.
  * @param {HTMLElement} status
  */
-const progressTo = (status) => (/** @type {number} */ f) => {
+const progressTo = (status) => (/** @type {number} */ fraction) => {
   status.textContent =
-    f >= 1
+    fraction >= 1
       ? 'Gemini Nano is ready. Writing your plan on this device…'
-      : `Downloading Gemini Nano to this device… ${Math.round(f * 100)}% (one time only)`;
+      : `Downloading Gemini Nano to this device… ${Math.round(fraction * 100)}% (one time only)`;
 };
 
 /**
@@ -76,12 +76,12 @@ async function onGeneratePlan(ctx) {
     return;
   }
   const status = byId('plan-status');
-  const btn = /** @type {HTMLButtonElement} */ (byId('gen-plan'));
+  const btn = buttonById('gen-plan');
   app.busy = true;
   btn.disabled = true;
   status.textContent = `${PROVIDER_LABELS[backend.provider]} is writing your family's plan…`;
   try {
-    const plan = await planWith({ ...backend, context: contextFor(app), onProgress: progressTo(status) });
+    const plan = await planWith({ ...backend, context: contextFor(app, app.env), onProgress: progressTo(status) });
     const { alerts } = buildOfflinePlan(app.state, app.env, app.swaps);
     app.aiPlan = { ...plan, alerts };
     renderPlan(app.aiPlan);
@@ -90,7 +90,7 @@ async function onGeneratePlan(ctx) {
       untranslated ? ' This language is not available on this device yet, so the plan is in English.' : ''
     }`;
   } catch (e) {
-    status.textContent = `${/** @type {Error} */ (e).message} Showing the built-in plan instead.`;
+    status.textContent = `${errorMessage(e)} Showing the built-in plan instead.`;
   } finally {
     app.busy = false;
     btn.disabled = false;
@@ -138,7 +138,7 @@ async function onAsk(ctx, question) {
   try {
     const answer = await askWith({
       ...backend,
-      context: contextFor(app),
+      context: contextFor(app, app.env),
       history: app.chat,
       question: q,
       onProgress: (f) => {
@@ -148,7 +148,7 @@ async function onAsk(ctx, question) {
     addBubble('model', answer, app.prefs.lang);
     app.chat.push({ role: 'user', text: q }, { role: 'model', text: answer });
   } catch (e) {
-    addBubble('model', `Error: ${/** @type {Error} */ (e).message}`, 'en');
+    addBubble('model', `Error: ${errorMessage(e)}`, 'en');
   } finally {
     pending.remove();
     app.busy = false;
@@ -172,10 +172,7 @@ export async function renderAiMode() {
  * @returns {string[]}
  */
 export function suggestedQuestions(members) {
-  const first =
-    members.find((m) => AGE_GROUPS[/** @type {keyof typeof AGE_GROUPS} */ (m.age)]?.sensitive)?.name ??
-    members[0]?.name ??
-    'my family';
+  const first = members.find((m) => lookup(AGE_GROUPS, m.age)?.sensitive)?.name ?? members[0]?.name ?? 'my family';
   return [
     `Is it safe for ${first} to go outside tomorrow?`,
     "Explain our biggest exposure source like I'm 10.",
@@ -204,9 +201,9 @@ export function renderSuggestions(ctx) {
  * @param {import('../types.js').AppState} app
  */
 export function openSettings(app) {
-  /** @type {HTMLInputElement} */ (byId('api-key')).value = loadApiKey();
-  /** @type {HTMLInputElement} */ (byId('model')).value = app.prefs.model;
-  /** @type {HTMLDialogElement} */ (byId('settings')).showModal();
+  inputById('api-key').value = loadApiKey();
+  inputById('model').value = app.prefs.model;
+  dialogById('settings').showModal();
 }
 
 /**
@@ -218,20 +215,20 @@ export function initAssistant(ctx) {
   byId('gen-plan').addEventListener('click', () => onGeneratePlan(ctx));
   byId('chat-form').addEventListener('submit', (e) => {
     e.preventDefault();
-    const input = /** @type {HTMLInputElement} */ (byId('chat-input'));
+    const input = inputById('chat-input');
     onAsk(ctx, input.value);
     input.value = '';
   });
 
   byId('open-settings').addEventListener('click', () => openSettings(app));
-  const dlg = /** @type {HTMLDialogElement} */ (byId('settings'));
+  const dlg = dialogById('settings');
   dlg.addEventListener('close', () => {
     if (dlg.returnValue !== 'save') {
       return;
     }
-    const key = /** @type {HTMLInputElement} */ (byId('api-key')).value;
-    const remember = /** @type {HTMLInputElement} */ (byId('remember-key')).checked;
-    const model = /** @type {HTMLInputElement} */ (byId('model')).value.trim();
+    const key = inputById('api-key').value;
+    const remember = inputById('remember-key').checked;
+    const model = inputById('model').value.trim();
     saveApiKey(key, remember);
     app.prefs.model = isValidModel(model) ? model : '';
     savePrefs(app.prefs);
@@ -239,7 +236,7 @@ export function initAssistant(ctx) {
     renderAiMode();
   });
 
-  const lang = /** @type {HTMLSelectElement} */ (byId('lang'));
+  const lang = selectById('lang');
   mount(
     lang,
     Object.entries(LANGUAGES).map(([k, v]) => h('option', { value: k, selected: k === app.prefs.lang }, v)),

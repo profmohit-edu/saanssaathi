@@ -34,7 +34,7 @@ export function initShare({ app }) {
         await navigator.share({ title: 'SaansSaathi clean-air plan', text });
         return;
       } catch (e) {
-        if (/** @type {Error} */ (e).name === 'AbortError') {
+        if (e instanceof Error && e.name === 'AbortError') {
           return; // user closed the share sheet
         }
       }

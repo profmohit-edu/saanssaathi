@@ -18,15 +18,10 @@ import { MAX_COMMUTE_HOURS, MAX_NAME_LENGTH, MAX_OUTDOOR_HOURS } from '../config
  * @param {string} id
  */
 export function selectField(label, value, options, onChange, id) {
-  const sel = /** @type {HTMLSelectElement} */ (
-    h(
-      'select',
-      { id },
-      Object.entries(options).map(([k, v]) =>
-        h('option', { value: k, selected: k === value }, typeof v === 'string' ? v : v.label),
-      ),
-    )
+  const choices = Object.entries(options).map(([k, v]) =>
+    h('option', { value: k, selected: k === value }, typeof v === 'string' ? v : v.label),
   );
+  const sel = h('select', { id }, choices);
   sel.addEventListener('change', () => onChange(sel.value));
   return h('div', { class: 'field' }, h('label', { for: id }, label), sel);
 }
@@ -40,9 +35,7 @@ export function selectField(label, value, options, onChange, id) {
  * @param {{min?: number, max?: number, step?: number}} [limits]
  */
 export function numberField(label, value, onChange, id, { min = 0, max = MAX_OUTDOOR_HOURS, step = 0.5 } = {}) {
-  const inp = /** @type {HTMLInputElement} */ (
-    h('input', { id, type: 'number', inputmode: 'decimal', min, max, step, value })
-  );
+  const inp = h('input', { id, type: 'number', inputmode: 'decimal', min, max, step, value });
   inp.addEventListener('input', () => {
     const n = Number(inp.value);
     const valid = inp.value !== '' && Number.isFinite(n) && n >= min && n <= max;
@@ -72,7 +65,7 @@ export function chipGroup(legend, options, selected, onChange, idPrefix) {
     h('legend', {}, legend),
     Object.entries(options).map(([key, label]) => {
       const id = `${idPrefix}-${key}`;
-      const cb = /** @type {HTMLInputElement} */ (h('input', { type: 'checkbox', id, checked: current.includes(key) }));
+      const cb = h('input', { type: 'checkbox', id, checked: current.includes(key) });
       cb.addEventListener('change', () => {
         current = cb.checked ? [...new Set([...current, key])] : current.filter((k) => k !== key);
         onChange(current);
@@ -88,9 +81,7 @@ export function chipGroup(legend, options, selected, onChange, idPrefix) {
  */
 export function renderHome({ app, actions }) {
   const home = app.state.home;
-  const purifier = /** @type {HTMLInputElement} */ (
-    h('input', { type: 'checkbox', id: 'home-purifier', checked: home.purifier })
-  );
+  const purifier = h('input', { type: 'checkbox', id: 'home-purifier', checked: home.purifier });
   purifier.addEventListener('change', () => {
     home.purifier = purifier.checked;
     actions.changed();
@@ -134,18 +125,26 @@ export function renderHome({ app, actions }) {
  * @param {import('../types.js').AppContext} ctx
  */
 function memberCard(m, idx, { app, actions }) {
-  const id = (/** @type {string} */ s) => `${m.id}-${s}`;
-  /** Updates a field and notifies the controller. */
-  const set = (/** @type {keyof import('../types.js').Member} */ key) => (/** @type {any} */ v) => {
-    /** @type {any} */ (m)[key] = v;
+  /** @param {string} suffix */
+  const id = (suffix) => `${m.id}-${suffix}`;
+  /**
+   * Returns a handler that updates one field and notifies the controller.
+   * @param {keyof import('../types.js').Member} key
+   */
+  const set = (key) => (/** @type {unknown} */ value) => {
+    Object.assign(m, { [key]: value });
     actions.changed();
   };
 
   const summaryName = h('strong', {}, m.name);
   const summaryMeta = h('span', { class: 'summary-meta' }, memberSummary(m));
-  const nameInput = /** @type {HTMLInputElement} */ (
-    h('input', { id: id('name'), type: 'text', maxlength: MAX_NAME_LENGTH, value: m.name, autocomplete: 'off' })
-  );
+  const nameInput = h('input', {
+    id: id('name'),
+    type: 'text',
+    maxlength: MAX_NAME_LENGTH,
+    value: m.name,
+    autocomplete: 'off',
+  });
   nameInput.addEventListener('input', () => {
     m.name = nameInput.value.slice(0, MAX_NAME_LENGTH) || `Person ${idx + 1}`;
     summaryName.textContent = m.name;

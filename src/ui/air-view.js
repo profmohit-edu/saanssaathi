@@ -2,13 +2,23 @@
  * "Air where you live": place search, live reading and the 24-hour chart.
  * @module ui/air-view
  */
-import { h, mount, byId, debounce } from '../dom.js';
+import { h, mount, byId, debounce, inputById, errorMessage } from '../dom.js';
 import { searchPlaces } from '../api.js';
 import { bandForPm25, naqiFromPm25, WHO_24H_PM25 } from '../aqi.js';
 import { formatRange } from '../windows.js';
 import { renderChart, renderTable } from '../chart.js';
 import { fmt, placeLabel, forecastSummary } from '../format.js';
 import { CLEAN_WINDOW_HOURS, GEO_OPTIONS, SEARCH_DEBOUNCE_MS } from '../config.js';
+
+/**
+ * Moves focus to an element if there is one.
+ * @param {Element | null} el
+ */
+function focusIfElement(el) {
+  if (el instanceof HTMLElement) {
+    el.focus();
+  }
+}
 
 /** Minimum characters before searching as the user types. */
 const MIN_LIVE_QUERY = 3;
@@ -104,7 +114,7 @@ export function renderAir(env, place, current = {}, note = '') {
  */
 export function initPlaceSearch({ app, actions }) {
   const form = byId('place-form');
-  const input = /** @type {HTMLInputElement} */ (byId('place-input'));
+  const input = inputById('place-input');
   const list = byId('place-results');
   input.value = placeLabel(app.state.place);
 
@@ -139,12 +149,10 @@ export function initPlaceSearch({ app, actions }) {
         choose(place);
       }
       if (e.key === 'ArrowDown') {
-        const next = /** @type {HTMLElement | null} */ (li.nextElementSibling);
-        next?.focus();
+        focusIfElement(li.nextElementSibling);
       }
       if (e.key === 'ArrowUp') {
-        const prev = /** @type {HTMLElement | null} */ (li.previousElementSibling);
-        (prev ?? input).focus();
+        focusIfElement(li.previousElementSibling ?? input);
       }
       if (e.key === 'Escape') {
         close();
@@ -165,7 +173,7 @@ export function initPlaceSearch({ app, actions }) {
     try {
       show(await searchPlaces(input.value));
     } catch (e) {
-      mount(list, h('li', { class: 'empty' }, /** @type {Error} */ (e).message));
+      mount(list, h('li', { class: 'empty' }, errorMessage(e)));
       list.hidden = false;
     }
   };
@@ -185,7 +193,7 @@ export function initPlaceSearch({ app, actions }) {
   input.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowDown' && !list.hidden) {
       e.preventDefault();
-      /** @type {HTMLElement | null} */ (list.firstElementChild)?.focus();
+      focusIfElement(list.firstElementChild);
     }
   });
 

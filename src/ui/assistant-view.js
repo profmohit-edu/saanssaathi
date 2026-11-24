@@ -85,7 +85,10 @@ async function onGeneratePlan(ctx) {
     const { alerts } = buildOfflinePlan(app.state, app.env, app.swaps);
     app.aiPlan = { ...plan, alerts };
     renderPlan(app.aiPlan);
-    status.textContent = `Plan ready, written by ${PROVIDER_LABELS[backend.provider]}.`;
+    const untranslated = backend.lang !== 'en' && plan.lang === 'en';
+    status.textContent = `Plan ready, written by ${PROVIDER_LABELS[backend.provider]}.${
+      untranslated ? ' This language is not available on this device yet, so the plan is in English.' : ''
+    }`;
   } catch (e) {
     status.textContent = `${/** @type {Error} */ (e).message} Showing the built-in plan instead.`;
   } finally {

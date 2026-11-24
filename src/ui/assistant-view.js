@@ -81,10 +81,15 @@ async function onGeneratePlan(ctx) {
   btn.disabled = true;
   status.textContent = `${PROVIDER_LABELS[backend.provider]} is writing your family's plan…`;
   try {
-    const plan = await planWith({ ...backend, context: contextFor(app, app.env), onProgress: progressTo(status) });
     const { alerts } = buildOfflinePlan(app.state, app.env, app.swaps);
-    app.aiPlan = { ...plan, alerts };
-    renderPlan(app.aiPlan);
+    const plan = await planWith({
+      ...backend,
+      context: contextFor(app, app.env),
+      onProgress: progressTo(status),
+      alerts,
+    });
+    app.aiPlan = plan;
+    renderPlan(plan);
     const untranslated = backend.lang !== 'en' && plan.lang === 'en';
     status.textContent = `Plan ready, written by ${PROVIDER_LABELS[backend.provider]}.${
       untranslated ? ' This language is not available on this device yet, so the plan is in English.' : ''

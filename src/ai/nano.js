@@ -100,7 +100,7 @@ export async function createNanoSession({ context, onProgress, ai = browserAI() 
  * @param {object} context
  */
 export async function nanoPlan(session, context) {
-  const text = await session.prompt(buildPlanPrompt(/** @type {any} */ (context), NANO_LANG), {
+  const text = await session.prompt(buildPlanPrompt(/** @type {any} */ (context), NANO_LANG, { compact: true }), {
     responseConstraint: NANO_PLAN_SCHEMA,
   });
   return { ...parsePlan(text), source: /** @type {const} */ ('gemini-nano') };
@@ -134,7 +134,13 @@ export function warmTranslator(target, ai = browserAI()) {
     const pair = { sourceLanguage: 'en', targetLanguage: target };
     const ready = Promise.resolve(ai.Translator.availability(pair))
       .then((status) => (status === 'unavailable' ? null : ai.Translator.create(pair)))
-      .catch(() => null);
+      .catch(() => null)
+      .then((translator) => {
+        if (!translator) {
+          translators.delete(target); // retry next time, e.g. once the pack has downloaded
+        }
+        return translator;
+      });
     translators.set(target, ready);
   }
   return translators.get(target);

@@ -57,19 +57,30 @@ export function errorMessage(error) {
 export function h(tag, attrs = {}, ...children) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs ?? {})) {
-    if (v === undefined || v === false || v === null) {
-      continue;
-    }
-    if (k === 'class') {
-      el.className = String(v);
-    } else if (k.startsWith('on')) {
-      throw new Error('Use addEventListener instead of inline handlers');
-    } else {
-      el.setAttribute(k, v === true ? '' : String(v));
-    }
+    setAttribute(el, k, v);
   }
   append(el, children);
   return el;
+}
+
+/**
+ * Sets one attribute safely: skips empty values and refuses inline event handlers.
+ * @param {HTMLElement} el
+ * @param {string} key
+ * @param {string|number|boolean|null|undefined} value
+ */
+function setAttribute(el, key, value) {
+  if (value === undefined || value === false || value === null) {
+    return;
+  }
+  if (key.startsWith('on')) {
+    throw new Error('Use addEventListener instead of inline handlers');
+  }
+  if (key === 'class') {
+    el.className = String(value);
+    return;
+  }
+  el.setAttribute(key, value === true ? '' : String(value));
 }
 
 /**

@@ -67,36 +67,43 @@ export function hasMetro(place) {
   return METRO_CITIES.has(norm(place?.name));
 }
 
+/** @param {{name?: string, admin1?: string} | undefined} place */
+const isDelhi = (place) => DELHI_NCR.has(norm(place?.name)) || norm(place?.admin1) === 'delhi';
+
+const GREEN_DELHI_ACTION = {
+  title: 'Report burning and dust: Green Delhi app',
+  text: 'Photograph garbage burning, construction dust or industrial smoke and report it in the Delhi Government’s Green Delhi app. Complaints go to the agency responsible and are tracked until they’re closed.',
+};
+const SAMEER_ACTION = {
+  title: 'Report to CPCB: Sameer app',
+  text: 'The Central Pollution Control Board’s Sameer app shows live station AQI and takes complaints about open burning, dust and vehicle smoke anywhere in India.',
+};
+const NO_BURN_ACTION = {
+  title: 'Make your society a no-burn zone',
+  text: 'Ask your RWA to ban leaf and garbage burning, give guards space-heater alternatives to bonfires, and set up a compost pit. One bonfire can affect a whole lane.',
+};
+const METRO_ACTION = {
+  title: 'Start a metro or carpool group',
+  text: 'Your city has metro rail. Pairing it with shared last-mile autos takes cars off the most polluted rush-hour roads.',
+};
+const CARPOOL_ACTION = {
+  title: 'Start a carpool group',
+  text: 'With no metro here, a 3–4 person office or school carpool cuts vehicles on the road, and the CO₂ and exhaust they produce, by up to 75%.',
+};
+
 /**
  * Tailored community actions for the user's city.
  * @param {{name?:string, admin1?:string, country?:string} | undefined} place
  * @returns {Array<{title:string, text:string}>}
  */
 export function communityActions(place) {
-  const city = norm(place?.name);
-  const inIndia = !place?.country || norm(place.country) === 'india';
   const actions = [];
-  if (DELHI_NCR.has(city) || norm(place?.admin1) === 'delhi') {
-    actions.push({
-      title: 'Report burning and dust: Green Delhi app',
-      text: 'Photograph garbage burning, construction dust or industrial smoke and report it in the Delhi Government’s Green Delhi app. Complaints go to the agency responsible and are tracked until they’re closed.',
-    });
+  if (isDelhi(place)) {
+    actions.push(GREEN_DELHI_ACTION);
   }
-  if (inIndia) {
-    actions.push({
-      title: 'Report to CPCB: Sameer app',
-      text: 'The Central Pollution Control Board’s Sameer app shows live station AQI and takes complaints about open burning, dust and vehicle smoke anywhere in India.',
-    });
-    actions.push({
-      title: 'Make your society a no-burn zone',
-      text: 'Ask your RWA to ban leaf and garbage burning, give guards space-heater alternatives to bonfires, and set up a compost pit. One bonfire can affect a whole lane.',
-    });
+  if (!place?.country || norm(place.country) === 'india') {
+    actions.push(SAMEER_ACTION, NO_BURN_ACTION);
   }
-  actions.push({
-    title: hasMetro(place) ? 'Start a metro or carpool group' : 'Start a carpool group',
-    text: hasMetro(place)
-      ? 'Your city has metro rail. Pairing it with shared last-mile autos takes cars off the most polluted rush-hour roads.'
-      : 'With no metro here, a 3–4 person office or school carpool cuts vehicles on the road, and the CO₂ and exhaust they produce, by up to 75%.',
-  });
+  actions.push(hasMetro(place) ? METRO_ACTION : CARPOOL_ACTION);
   return actions;
 }

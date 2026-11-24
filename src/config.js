@@ -5,6 +5,9 @@
  */
 
 /** Air-quality API response cache lifetime (ms). */
+/** One hour in milliseconds. */
+export const MS_PER_HOUR = 3_600_000;
+
 export const AIR_CACHE_TTL_MS = 10 * 60 * 1000;
 /** Air-quality / geocoding request timeout (ms). */
 export const AIR_TIMEOUT_MS = 12_000;

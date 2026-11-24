@@ -5,6 +5,7 @@
  * Timing activities can cut exposure without any cost.
  * @module windows
  */
+import { MS_PER_HOUR } from './config.js';
 
 /**
  * @typedef {{time: Date, pm25: number}} HourPoint
@@ -35,6 +36,18 @@ export function mean(pts) {
 }
 
 /**
+ * True when every hour is inside [fromHour, toHour) and the hours are consecutive.
+ * @param {HourPoint[]} slice
+ * @param {number} fromHour
+ * @param {number} toHour
+ */
+function isUsableSlice(slice, fromHour, toHour) {
+  const inHours = slice.every((p) => p.time.getHours() >= fromHour && p.time.getHours() < toHour);
+  const contiguous = slice.every((p, j) => j === 0 || p.time.getTime() - slice[j - 1].time.getTime() === MS_PER_HOUR);
+  return inHours && contiguous;
+}
+
+/**
  * Best contiguous window of `length` hours between `fromHour` and `toHour` (local hours).
  * @param {HourPoint[]} pts
  * @param {number} length
@@ -46,17 +59,12 @@ export function bestWindow(pts, length, { fromHour = 6, toHour = 22 } = {}) {
   let best = null;
   for (let i = 0; i + length <= pts.length; i++) {
     const slice = pts.slice(i, i + length);
-    const okHours = slice.every((p) => {
-      const h = p.time.getHours();
-      return h >= fromHour && h < toHour;
-    });
-    const contiguous = slice.every((p, j) => j === 0 || p.time.getTime() - slice[j - 1].time.getTime() === 3600000);
-    if (!okHours || !contiguous) {
+    if (!isUsableSlice(slice, fromHour, toHour)) {
       continue;
     }
     const m = mean(slice);
     if (!best || m < best.mean) {
-      best = { start: slice[0].time, end: new Date(slice[length - 1].time.getTime() + 3600000), mean: m };
+      best = { start: slice[0].time, end: new Date(slice[length - 1].time.getTime() + MS_PER_HOUR), mean: m };
     }
   }
   return best;
@@ -74,7 +82,7 @@ export function worstWindow(pts, length) {
     const slice = pts.slice(i, i + length);
     const m = mean(slice);
     if (!worst || m > worst.mean) {
-      worst = { start: slice[0].time, end: new Date(slice[length - 1].time.getTime() + 3600000), mean: m };
+      worst = { start: slice[0].time, end: new Date(slice[length - 1].time.getTime() + MS_PER_HOUR), mean: m };
     }
   }
   return worst;

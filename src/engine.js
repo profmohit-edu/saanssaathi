@@ -8,7 +8,7 @@ import { bandForPm25 } from './aqi.js';
 import { AGE_GROUPS, infiltrationRatio } from './exposure.js';
 import { formatRange, ventilationHours } from './windows.js';
 import { communityActions } from './local.js';
-import { CLEAN_WINDOW_HOURS } from './config.js';
+import { CLEAN_WINDOW_HOURS, MS_PER_HOUR } from './config.js';
 
 /** Evidence-based indoor air hacks. `when` decides relevance. */
 const HACKS = [
@@ -124,6 +124,85 @@ export function healthAlerts(members, pm25) {
   });
 }
 
+/** @typedef {{time: string, title: string, detail: string}} PlanItem */
+
+/** @type {PlanItem} */
+const BEDTIME_ITEM = {
+  time: 'Bedtime',
+  title: 'Make the bedroom the clean room',
+  detail: 'Shut the bedroom door an hour before sleep and run the filter on low all night.',
+};
+
+/**
+ * @param {import('./types.js').Environment} env
+ * @returns {PlanItem | null}
+ */
+function peakItem(env) {
+  return (
+    env.peak && {
+      time: formatRange(env.peak.start, env.peak.end),
+      title: 'Peak smog: windows shut, stay in',
+      detail: `PM2.5 is forecast to average ${Math.round(env.peak.mean)} µg/m³ here. Keep doors and windows closed and the purifier on high, and push errands to later.`,
+    }
+  );
+}
+
+/**
+ * @param {import('./types.js').Member[]} members
+ * @param {{start: Date, end: Date, mean: number} | null} best
+ * @returns {PlanItem | null}
+ */
+function cleanWindowItem(members, best) {
+  if (!best) {
+    return null;
+  }
+  const outdoorPeople = members.filter((m) => m.outdoorHours > 0).map((m) => m.name);
+  const who = outdoorPeople.length ? ` (${outdoorPeople.join(', ')})` : '';
+  return {
+    time: formatRange(best.start, best.end),
+    title: 'Cleanest window: go out now',
+    detail: `Averages ${Math.round(best.mean)} µg/m³. Use it for walks, play and errands${who}.`,
+  };
+}
+
+/**
+ * @param {Array<{time: Date}>} vent hours when outdoor air beats indoor air
+ * @returns {PlanItem}
+ */
+function ventilationItem(vent) {
+  if (!vent.length) {
+    return {
+      time: 'All day',
+      title: 'Don’t open the windows to air out today',
+      detail: 'Outdoor air stays dirtier than indoor air all day. Use the kitchen exhaust for fresh air instead.',
+    };
+  }
+  const first = vent[0].time;
+  return {
+    time: formatRange(first, new Date(first.getTime() + MS_PER_HOUR)),
+    title: 'Air out the home for 15 minutes',
+    detail:
+      'Outdoor air is briefly cleaner than indoor air. Open opposite windows for a cross-breeze, then seal up again.',
+  };
+}
+
+/**
+ * @param {import('./types.js').Member[]} members
+ * @param {import('./types.js').Environment} env
+ * @returns {PlanItem | null}
+ */
+function commuteItem(members, env) {
+  const commuters = members.filter((m) => m.commuteMode !== 'none' && m.commuteHours > 0);
+  if (!commuters.length) {
+    return null;
+  }
+  return {
+    time: 'Commute',
+    title: 'Commute smart',
+    detail: `${commuters.map((m) => m.name).join(', ')}: wear an N95 outside cabins, keep car windows up with AC on recirculate, and avoid waiting at busy junctions. Rush-hour air averages ${Math.round(env.commuteMean)} µg/m³.`,
+  };
+}
+
 /**
  * Builds an hour-by-hour plan for the next day.
  * @param {import('./types.js').Household} state
@@ -132,63 +211,22 @@ export function healthAlerts(members, pm25) {
  */
 export function buildOfflinePlan(state, env, swaps) {
   const band = bandForPm25(env.current);
-  const best2 = env.bestFor(CLEAN_WINDOW_HOURS);
   const indoorEst = env.dailyMean * infiltrationRatio(state.home);
-  const vent = ventilationHours(env.hours, indoorEst);
-  const items = [];
+  const schedule = /** @type {PlanItem[]} */ (
+    [
+      peakItem(env),
+      cleanWindowItem(state.members, env.bestFor(CLEAN_WINDOW_HOURS)),
+      ventilationItem(ventilationHours(env.hours, indoorEst)),
+      commuteItem(state.members, env),
+      BEDTIME_ITEM,
+    ].filter(Boolean)
+  ).sort((a, b) => order(a.time) - order(b.time));
 
-  if (env.peak) {
-    items.push({
-      time: formatRange(env.peak.start, env.peak.end),
-      title: 'Peak smog: windows shut, stay in',
-      detail: `PM2.5 is forecast to average ${Math.round(env.peak.mean)} µg/m³ here. Keep doors and windows closed and the purifier on high, and push errands to later.`,
-    });
-  }
-  if (best2) {
-    const outdoorPeople = state.members.filter((m) => m.outdoorHours > 0).map((m) => m.name);
-    items.push({
-      time: formatRange(best2.start, best2.end),
-      title: 'Cleanest window: go out now',
-      detail: `Averages ${Math.round(best2.mean)} µg/m³. Use it for walks, play and errands${outdoorPeople.length ? ` (${outdoorPeople.join(', ')})` : ''}.`,
-    });
-  }
-  if (vent.length) {
-    const first = vent[0].time;
-    items.push({
-      time: formatRange(first, new Date(first.getTime() + 3600000)),
-      title: 'Air out the home for 15 minutes',
-      detail:
-        'Outdoor air is briefly cleaner than indoor air. Open opposite windows for a cross-breeze, then seal up again.',
-    });
-  } else {
-    items.push({
-      time: 'All day',
-      title: 'Don’t open the windows to air out today',
-      detail: 'Outdoor air stays dirtier than indoor air all day. Use the kitchen exhaust for fresh air instead.',
-    });
-  }
-  const commuters = state.members.filter((m) => m.commuteMode !== 'none' && m.commuteHours > 0);
-  if (commuters.length) {
-    items.push({
-      time: 'Commute',
-      title: 'Commute smart',
-      detail: `${commuters.map((m) => m.name).join(', ')}: wear an N95 outside cabins, keep car windows up with AC on recirculate, and avoid waiting at busy junctions. Rush-hour air averages ${Math.round(env.commuteMean)} µg/m³.`,
-    });
-  }
-  items.push({
-    time: 'Bedtime',
-    title: 'Make the bedroom the clean room',
-    detail: 'Shut the bedroom door an hour before sleep and run the filter on low all night.',
-  });
-
-  items.sort((a, b) => order(a.time) - order(b.time));
-
-  const top = swaps.slice(0, 3);
   return {
     source: /** @type {const} */ ('offline'),
     headline: `${band.label} air (${Math.round(env.current)} µg/m³ now). ${band.advice}`,
-    schedule: items,
-    topSwaps: top.map((s) => s.title),
+    schedule,
+    topSwaps: swaps.slice(0, 3).map((s) => s.title),
     alerts: healthAlerts(state.members, env.current),
     hacks: HACKS.filter((h) => h.when(state.home)).map(({ title, text }) => ({ title, text })),
     myths: MYTHS,

@@ -278,10 +278,27 @@ export function saveForecast(place, json, now = Date.now()) {
 export function loadForecast(place, now = Date.now()) {
   try {
     const saved = JSON.parse(safeStorage('localStorage')?.getItem(KEY_FORECAST) ?? 'null');
-    const samePlace =
-      saved && Math.abs(saved.lat - place.latitude) < 0.01 && Math.abs(saved.lon - place.longitude) < 0.01;
-    return samePlace && now - saved.at < FORECAST_MAX_AGE_MS ? { json: saved.json, at: saved.at } : null;
+    return isUsableForecast(saved, place, now) ? { json: saved.json, at: saved.at } : null;
   } catch {
     return null;
   }
+}
+
+/** Places closer than this (degrees) share a saved forecast. */
+const SAME_PLACE_DEGREES = 0.01;
+
+/**
+ * True when a saved forecast is for the same place and fresh enough to show.
+ * @param {any} saved
+ * @param {{latitude: number, longitude: number}} place
+ * @param {number} now
+ */
+function isUsableForecast(saved, place, now) {
+  if (!saved) {
+    return false;
+  }
+  const samePlace =
+    Math.abs(saved.lat - place.latitude) < SAME_PLACE_DEGREES &&
+    Math.abs(saved.lon - place.longitude) < SAME_PLACE_DEGREES;
+  return samePlace && now - saved.at < FORECAST_MAX_AGE_MS;
 }

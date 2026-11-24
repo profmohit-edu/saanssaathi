@@ -110,6 +110,12 @@ test('translatePlan translates text but keeps names and times', async () => {
   assert.equal(await translatePlan(same, 'en', fakeAI()), same);
 });
 
+test('translatePlan also translates health alerts, keeping who and level', async () => {
+  const alerts = [{ who: 'Dadi', level: 'high', text: 'Keep the inhaler on hand' }];
+  const out = await translatePlan({ source: 'gemini-nano', ...PLAN, alerts }, 'hi', fakeAI());
+  assert.deepEqual(out.alerts, [{ who: 'Dadi', level: 'high', text: '[hi] Keep the inhaler on hand' }]);
+});
+
 test('provider prefers the cloud key, then on-device Nano, then none', async () => {
   assert.equal(await resolveProvider('KEY', fakeAI()), 'cloud');
   assert.equal(await resolveProvider('', fakeAI({ availability: 'downloadable' })), 'nano');

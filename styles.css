@@ -84,7 +84,7 @@ label { font-weight: 600; font-size: .9rem; display: block; margin-bottom: .25re
 .field { min-width: 0; }
 .field.grow { flex: 1; }
 .check { display: flex; gap: .5rem; align-items: center; font-weight: 500; }
-.check input, .chip input { width: 1.1rem; height: 1.1rem; accent-color: var(--accent); }
+.check input, .chip input { width: 1.5rem; height: 1.5rem; flex-shrink: 0; accent-color: var(--accent); }
 .row { display: flex; gap: .5rem; flex-wrap: wrap; }
 .row input { flex: 1 1 240px; }
 fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
@@ -175,7 +175,7 @@ legend { font-weight: 700; font-size: .9rem; padding: 0; margin-bottom: .35rem; 
 .swap { display: grid; grid-template-columns: auto 1fr; gap: .8rem; border: 1px solid var(--line); border-left: 5px solid var(--sky); border-radius: 12px; padding: .8rem 1rem; }
 .swap.cat-home { border-left-color: var(--sleep); }
 .swap.cat-community { border-left-color: var(--good); }
-.swap-check input { width: 1.4rem; height: 1.4rem; margin-top: .2rem; accent-color: var(--accent); }
+.swap-check input { width: 1.5rem; height: 1.5rem; margin-top: .2rem; accent-color: var(--accent); }
 .swap-title { font-size: 1rem; margin: 0; cursor: pointer; }
 .rank { color: var(--accent-ink); margin-right: .4rem; }
 .swap-impact { margin: .2rem 0; }

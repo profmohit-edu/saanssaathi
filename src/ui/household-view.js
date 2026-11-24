@@ -10,14 +10,16 @@ import { CONDITIONS, memberSummary } from '../format.js';
 import { MAX_COMMUTE_HOURS, MAX_NAME_LENGTH, MAX_OUTDOOR_HOURS } from '../config.js';
 
 /**
- * Labelled <select> bound to an options map.
- * @param {string} label
- * @param {string} value current key
- * @param {Record<string, string | {label: string}>} options
- * @param {(value: string) => void} onChange
- * @param {string} id
+ * @typedef {object} FieldSpec
+ * @property {string} id element id
+ * @property {string} label visible label
  */
-export function selectField(label, value, options, onChange, id) {
+
+/**
+ * Labelled <select> bound to an options map.
+ * @param {FieldSpec & {value: string, options: Record<string, string | {label: string}>, onChange: (value: string) => void}} spec
+ */
+export function selectField({ id, label, value, options, onChange }) {
   const choices = Object.entries(options).map(([k, v]) =>
     h('option', { value: k, selected: k === value }, typeof v === 'string' ? v : v.label),
   );
@@ -28,13 +30,9 @@ export function selectField(label, value, options, onChange, id) {
 
 /**
  * Labelled numeric input that only reports valid values.
- * @param {string} label
- * @param {number} value
- * @param {(value: number) => void} onChange
- * @param {string} id
- * @param {{min?: number, max?: number, step?: number}} [limits]
+ * @param {FieldSpec & {value: number, onChange: (value: number) => void, min?: number, max?: number, step?: number}} spec
  */
-export function numberField(label, value, onChange, id, { min = 0, max = MAX_OUTDOOR_HOURS, step = 0.5 } = {}) {
+export function numberField({ id, label, value, onChange, min = 0, max = MAX_OUTDOOR_HOURS, step = 0.5 }) {
   const inp = h('input', { id, type: 'number', inputmode: 'decimal', min, max, step, value });
   inp.addEventListener('input', () => {
     const n = Number(inp.value);
@@ -51,13 +49,9 @@ export function numberField(label, value, onChange, id, { min = 0, max = MAX_OUT
 
 /**
  * Group of checkbox "chips" bound to a list of selected keys.
- * @param {string} legend
- * @param {Record<string, string>} options key → label
- * @param {string[]} selected
- * @param {(next: string[]) => void} onChange
- * @param {string} idPrefix
+ * @param {{idPrefix: string, legend: string, options: Record<string, string>, selected: string[], onChange: (next: string[]) => void}} spec
  */
-export function chipGroup(legend, options, selected, onChange, idPrefix) {
+export function chipGroup({ idPrefix, legend, options, selected, onChange }) {
   let current = [...selected];
   return h(
     'fieldset',
@@ -90,32 +84,99 @@ export function renderHome({ app, actions }) {
 
   mount(
     byId('home-grid'),
-    selectField(
-      'Windows during the day',
-      home.windows,
-      { open: 'Mostly open', closed: 'Mostly closed' },
-      (v) => {
+    selectField({
+      id: 'home-windows',
+      label: 'Windows during the day',
+      value: home.windows,
+      options: { open: 'Mostly open', closed: 'Mostly closed' },
+      onChange: (v) => {
         home.windows = v === 'closed' ? 'closed' : 'open';
         actions.changed();
       },
-      'home-windows',
-    ),
+    }),
     h(
       'div',
       { class: 'field' },
       h('label', { class: 'check', for: 'home-purifier' }, purifier, 'Air purifier or DIY filter'),
     ),
-    chipGroup(
-      'Things burned or used at home',
-      sourceLabels,
-      home.sources,
-      (next) => {
+    chipGroup({
+      idPrefix: 'src',
+      legend: 'Things burned or used at home',
+      options: sourceLabels,
+      selected: home.sources,
+      onChange: (next) => {
         home.sources = next;
         actions.changed();
       },
-      'src',
-    ),
+    }),
   );
+}
+
+/**
+ * Name input that keeps the card summary in sync.
+ * @param {import('../types.js').Member} m
+ * @param {number} idx
+ * @param {HTMLElement} summaryName
+ * @param {import('../types.js').AppActions} actions
+ */
+function nameField(m, idx, summaryName, actions) {
+  const id = `${m.id}-name`;
+  const input = h('input', { id, type: 'text', maxlength: MAX_NAME_LENGTH, value: m.name, autocomplete: 'off' });
+  input.addEventListener('input', () => {
+    m.name = input.value.slice(0, MAX_NAME_LENGTH) || `Person ${idx + 1}`;
+    summaryName.textContent = m.name;
+    actions.changed(false);
+  });
+  return h('div', { class: 'field grow' }, h('label', { for: id }, 'Name'), input);
+}
+
+/**
+ * "Remove" button, shown only when there is more than one member.
+ * @param {import('../types.js').Member} m
+ * @param {import('../types.js').AppContext} ctx
+ */
+function removeButton(m, { app, actions }) {
+  const btn = h('button', { type: 'button', class: 'btn ghost small', 'aria-label': `Remove ${m.name}` }, 'Remove');
+  btn.addEventListener('click', () => {
+    app.state.members = app.state.members.filter((x) => x.id !== m.id);
+    actions.renderMembers();
+    actions.changed();
+    byId('add-member').focus();
+  });
+  return btn;
+}
+
+/**
+ * The routine fields for one member.
+ * @param {import('../types.js').Member} m
+ * @param {import('../types.js').AppActions} actions
+ */
+function routineFields(m, actions) {
+  /** @param {string} suffix */
+  const id = (suffix) => `${m.id}-${suffix}`;
+  /** @param {keyof import('../types.js').Member} key */
+  const set = (key) => (/** @type {unknown} */ value) => {
+    Object.assign(m, { [key]: value });
+    actions.changed();
+  };
+  /** @param {keyof import('../types.js').Member} key @param {string} label @param {Record<string, any>} options @param {string} suffix */
+  const select = (key, label, options, suffix) =>
+    selectField({ id: id(suffix), label, value: String(m[key]), options, onChange: set(key) });
+  return [
+    select('age', 'Age group', AGE_GROUPS, 'age'),
+    select('commuteMode', 'Commute', COMMUTE_MODES, 'commute'),
+    numberField({
+      id: id('ch'),
+      label: 'Commute hours / day',
+      value: m.commuteHours,
+      onChange: set('commuteHours'),
+      max: MAX_COMMUTE_HOURS,
+    }),
+    numberField({ id: id('oh'), label: 'Outdoor hours / day', value: m.outdoorHours, onChange: set('outdoorHours') }),
+    select('outdoorTime', 'Usually outside', OUTDOOR_SLOTS, 'ot'),
+    select('outdoorActivity', 'Outdoor activity', OUTDOOR_ACTIVITY, 'oa'),
+    select('mask', 'Mask', MASKS, 'mask'),
+  ];
 }
 
 /**
@@ -124,41 +185,10 @@ export function renderHome({ app, actions }) {
  * @param {number} idx
  * @param {import('../types.js').AppContext} ctx
  */
-function memberCard(m, idx, { app, actions }) {
-  /** @param {string} suffix */
-  const id = (suffix) => `${m.id}-${suffix}`;
-  /**
-   * Returns a handler that updates one field and notifies the controller.
-   * @param {keyof import('../types.js').Member} key
-   */
-  const set = (key) => (/** @type {unknown} */ value) => {
-    Object.assign(m, { [key]: value });
-    actions.changed();
-  };
-
+function memberCard(m, idx, ctx) {
+  const { app, actions } = ctx;
   const summaryName = h('strong', {}, m.name);
   const summaryMeta = h('span', { class: 'summary-meta' }, memberSummary(m));
-  const nameInput = h('input', {
-    id: id('name'),
-    type: 'text',
-    maxlength: MAX_NAME_LENGTH,
-    value: m.name,
-    autocomplete: 'off',
-  });
-  nameInput.addEventListener('input', () => {
-    m.name = nameInput.value.slice(0, MAX_NAME_LENGTH) || `Person ${idx + 1}`;
-    summaryName.textContent = m.name;
-    actions.changed(false);
-  });
-
-  const remove = h('button', { type: 'button', class: 'btn ghost small', 'aria-label': `Remove ${m.name}` }, 'Remove');
-  remove.addEventListener('click', () => {
-    app.state.members = app.state.members.filter((x) => x.id !== m.id);
-    actions.renderMembers();
-    actions.changed();
-    byId('add-member').focus();
-  });
-
   const card = h(
     'details',
     { class: 'member', open: idx === 0 || app.state.members.length === 1 },
@@ -166,21 +196,20 @@ function memberCard(m, idx, { app, actions }) {
     h(
       'div',
       { class: 'member-head' },
-      h('div', { class: 'field grow' }, h('label', { for: id('name') }, 'Name'), nameInput),
-      app.state.members.length > 1 && remove,
+      nameField(m, idx, summaryName, actions),
+      app.state.members.length > 1 && removeButton(m, ctx),
     ),
-    h(
-      'div',
-      { class: 'member-grid' },
-      selectField('Age group', m.age, AGE_GROUPS, set('age'), id('age')),
-      selectField('Commute', m.commuteMode, COMMUTE_MODES, set('commuteMode'), id('commute')),
-      numberField('Commute hours / day', m.commuteHours, set('commuteHours'), id('ch'), { max: MAX_COMMUTE_HOURS }),
-      numberField('Outdoor hours / day', m.outdoorHours, set('outdoorHours'), id('oh')),
-      selectField('Usually outside', m.outdoorTime, OUTDOOR_SLOTS, set('outdoorTime'), id('ot')),
-      selectField('Outdoor activity', m.outdoorActivity, OUTDOOR_ACTIVITY, set('outdoorActivity'), id('oa')),
-      selectField('Mask', m.mask, MASKS, set('mask'), id('mask')),
-    ),
-    chipGroup('Health', CONDITIONS, m.conditions, set('conditions'), id('c')),
+    h('div', { class: 'member-grid' }, routineFields(m, actions)),
+    chipGroup({
+      idPrefix: `${m.id}-c`,
+      legend: 'Health',
+      options: CONDITIONS,
+      selected: m.conditions,
+      onChange: (next) => {
+        m.conditions = next;
+        actions.changed();
+      },
+    }),
   );
   card.addEventListener('change', () => {
     summaryMeta.textContent = memberSummary(m);

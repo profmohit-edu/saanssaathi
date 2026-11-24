@@ -47,6 +47,56 @@ export function showAirError(message, onRetry) {
 }
 
 /**
+ * The coloured badge with the current PM2.5 and NAQI band.
+ * @param {number} pm25
+ */
+function aqiBadge(pm25) {
+  const band = bandForPm25(pm25);
+  return h(
+    'div',
+    { class: `aqi-badge band-${band.key}` },
+    h('span', { class: 'aqi-num' }, fmt(pm25)),
+    h('span', { class: 'aqi-unit' }, 'µg/m³ PM2.5 now'),
+    h('span', { class: 'aqi-band' }, `${band.label} · NAQI ${naqiFromPm25(pm25)}`),
+  );
+}
+
+/**
+ * A fact line such as "Worst stretch: 7 am – 10 am (124 µg/m³)".
+ * @param {string} label
+ * @param {{start: Date, end: Date, mean: number}} window
+ * @param {string} [cls]
+ */
+function windowFact(label, window, cls = '') {
+  return h(
+    'li',
+    cls ? { class: cls } : {},
+    label,
+    h('strong', {}, formatRange(window.start, window.end)),
+    ` (${fmt(window.mean)} µg/m³)`,
+  );
+}
+
+/**
+ * Bullet list of key facts about the next 24 hours.
+ * @param {import('../types.js').Environment} env
+ * @param {{start: Date, end: Date, mean: number} | null} best
+ * @param {{pm10?: number, nitrogen_dioxide?: number}} current
+ */
+function factsList(env, best, current) {
+  return h(
+    'ul',
+    { class: 'facts' },
+    h('li', {}, h('strong', {}, `${fmt(env.current / WHO_24H_PM25, 1)}×`), ' the WHO 24-hour guideline'),
+    h('li', {}, 'Next 24 h average: ', h('strong', {}, `${fmt(env.dailyMean)} µg/m³`)),
+    env.peak && windowFact('Worst stretch: ', env.peak),
+    best && windowFact(`Cleanest ${CLEAN_WINDOW_HOURS} hours: `, best, 'good'),
+    Number.isFinite(current.pm10) &&
+      h('li', {}, `PM10 ${fmt(Number(current.pm10))} · NO₂ ${fmt(current.nitrogen_dioxide ?? 0)} µg/m³`),
+  );
+}
+
+/**
  * Renders the current reading, key facts and chart.
  * @param {import('../types.js').Environment} env
  * @param {import('../types.js').Place} place
@@ -54,54 +104,17 @@ export function showAirError(message, onRetry) {
  * @param {string} [note] status note, e.g. offline data
  */
 export function renderAir(env, place, current = {}, note = '') {
-  const band = bandForPm25(env.current);
   const best = env.bestFor(CLEAN_WINDOW_HOURS);
   const out = byId('air-now');
-  mount(
-    out,
-    h(
-      'div',
-      { class: 'air-grid' },
-      h(
-        'div',
-        { class: `aqi-badge band-${band.key}` },
-        h('span', { class: 'aqi-num' }, fmt(env.current)),
-        h('span', { class: 'aqi-unit' }, 'µg/m³ PM2.5 now'),
-        h('span', { class: 'aqi-band' }, `${band.label} · NAQI ${naqiFromPm25(env.current)}`),
-      ),
-      h(
-        'div',
-        { class: 'air-facts' },
-        h('p', { class: 'place' }, placeLabel(place)),
-        note && h('p', { class: 'offline-note', role: 'status' }, note),
-        h('p', {}, band.advice),
-        h(
-          'ul',
-          { class: 'facts' },
-          h('li', {}, h('strong', {}, `${fmt(env.current / WHO_24H_PM25, 1)}×`), ' the WHO 24-hour guideline'),
-          h('li', {}, 'Next 24 h average: ', h('strong', {}, `${fmt(env.dailyMean)} µg/m³`)),
-          env.peak &&
-            h(
-              'li',
-              {},
-              'Worst stretch: ',
-              h('strong', {}, formatRange(env.peak.start, env.peak.end)),
-              ` (${fmt(env.peak.mean)} µg/m³)`,
-            ),
-          best &&
-            h(
-              'li',
-              { class: 'good' },
-              `Cleanest ${CLEAN_WINDOW_HOURS} hours: `,
-              h('strong', {}, formatRange(best.start, best.end)),
-              ` (${fmt(best.mean)} µg/m³)`,
-            ),
-          Number.isFinite(current.pm10) &&
-            h('li', {}, `PM10 ${fmt(Number(current.pm10))} · NO₂ ${fmt(current.nitrogen_dioxide ?? 0)} µg/m³`),
-        ),
-      ),
-    ),
+  const facts = h(
+    'div',
+    { class: 'air-facts' },
+    h('p', { class: 'place' }, placeLabel(place)),
+    note && h('p', { class: 'offline-note', role: 'status' }, note),
+    h('p', {}, bandForPm25(env.current).advice),
+    factsList(env, best, current),
   );
+  mount(out, h('div', { class: 'air-grid' }, aqiBadge(env.current), facts));
   out.setAttribute('aria-busy', 'false');
   renderChart(byId('chart'), env.hours, best);
   mount(byId('chart-table'), renderTable(env.hours));
@@ -149,6 +162,32 @@ function initGeolocation(choose) {
 }
 
 /**
+ * Wires the search triggers: form submit, live typing and ArrowDown into the list.
+ * @param {HTMLElement} form
+ * @param {HTMLInputElement} input
+ * @param {HTMLElement} list
+ * @param {() => void} run
+ */
+function wireSearchTriggers(form, input, list, run) {
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    run();
+  });
+  const liveSearch = () => {
+    if (input.value.trim().length >= MIN_LIVE_QUERY) {
+      run();
+    }
+  };
+  input.addEventListener('input', debounce(liveSearch, SEARCH_DEBOUNCE_MS));
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' && !list.hidden) {
+      e.preventDefault();
+      focusIfElement(list.firstElementChild);
+    }
+  });
+}
+
+/**
  * Wires the place search box, results list and geolocation button.
  * @param {import('../types.js').AppContext} ctx
  */
@@ -158,10 +197,12 @@ export function initPlaceSearch({ app, actions }) {
   const list = byId('place-results');
   input.value = placeLabel(app.state.place);
 
-  const close = () => {
-    list.hidden = true;
-    input.setAttribute('aria-expanded', 'false');
+  /** @param {boolean} expanded */
+  const setOpen = (expanded) => {
+    list.hidden = !expanded;
+    input.setAttribute('aria-expanded', String(expanded));
   };
+  const close = () => setOpen(false);
 
   /** @param {import('../types.js').Place} place */
   const choose = (place) => {
@@ -183,37 +224,16 @@ export function initPlaceSearch({ app, actions }) {
     return li;
   };
 
-  /** @param {Node | Node[]} content */
-  const open = (content) => {
-    mount(list, content);
-    list.hidden = false;
-    input.setAttribute('aria-expanded', 'true');
-  };
-
   const run = async () => {
     try {
       const results = await searchPlaces(input.value);
-      open(results.length ? results.map(option) : h('li', { class: 'empty' }, 'No matching places'));
+      mount(list, results.length ? results.map(option) : h('li', { class: 'empty' }, 'No matching places'));
     } catch (e) {
-      open(h('li', { class: 'empty' }, errorMessage(e)));
+      mount(list, h('li', { class: 'empty' }, errorMessage(e)));
     }
+    setOpen(true);
   };
 
-  form.addEventListener('submit', (e) => {
-    e.preventDefault();
-    run();
-  });
-  const liveSearch = () => {
-    if (input.value.trim().length >= MIN_LIVE_QUERY) {
-      run();
-    }
-  };
-  input.addEventListener('input', debounce(liveSearch, SEARCH_DEBOUNCE_MS));
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowDown' && !list.hidden) {
-      e.preventDefault();
-      focusIfElement(list.firstElementChild);
-    }
-  });
+  wireSearchTriggers(form, input, list, run);
   initGeolocation(choose);
 }

@@ -8,6 +8,8 @@ import {
   translate,
   translatePlan,
   NANO_PLAN_SCHEMA,
+  warmTranslator,
+  resetTranslators,
 } from '../src/ai/nano.js';
 import { resolveProvider, planWith, askWith, resetNanoCache, PROVIDER_LABELS } from '../src/ai/provider.js';
 
@@ -52,7 +54,10 @@ function fakeAI({ availability = 'available', translatorStatus = 'available', re
   };
 }
 
-beforeEach(() => resetNanoCache());
+beforeEach(() => {
+  resetNanoCache();
+  resetTranslators();
+});
 
 test('availability reports unavailable without the API or on error', async () => {
   assert.equal(await nanoAvailability({}), 'unavailable');
@@ -152,4 +157,38 @@ test('askWith(nano) reuses one session for the same household', async () => {
   await askWith({ ...base, context: { a: 2 }, question: 'q3' });
   assert.equal(ai.calls.create.length, 2);
   await assert.rejects(askWith({ ...base, provider: 'none', question: 'q' }), /No AI/);
+});
+
+test('translator is created once per language and reused', async () => {
+  const ai = fakeAI();
+  let creates = 0;
+  const orig = ai.Translator.create;
+  ai.Translator.create = async (pair) => {
+    creates++;
+    return orig(pair);
+  };
+  warmTranslator('hi', ai);
+  await translate('a', 'hi', ai);
+  await translate('b', 'hi', ai);
+  assert.equal(creates, 1);
+});
+
+test('a failed language-pack download falls back to the English plan', async () => {
+  const ai = fakeAI();
+  ai.Translator.create = async () => {
+    throw new Error('Requires a user gesture');
+  };
+  const out = await translatePlan({ source: 'gemini-nano', ...PLAN }, 'hi', ai);
+  assert.equal(out.lang, 'en');
+  assert.equal(out.headline, PLAN.headline);
+});
+
+test('a translation error returns the original text', async () => {
+  const ai = fakeAI();
+  ai.Translator.create = async () => ({
+    translate: async () => {
+      throw new Error('boom');
+    },
+  });
+  assert.equal(await translate('hello', 'ta', ai), 'hello');
 });

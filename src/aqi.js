@@ -27,18 +27,54 @@ const US_PM25 = [
 
 /** NAQI bands with colours chosen for ≥3:1 contrast against white text or dark text. */
 export const BANDS = Object.freeze([
-  { key: 'good', label: 'Good', max: 50, color: '#2e9d4e', text: '#ffffff',
-    advice: 'Air is clean. A great time to be outdoors and air out your home.' },
-  { key: 'satisfactory', label: 'Satisfactory', max: 100, color: '#8cc63f', text: '#10240a',
-    advice: 'Acceptable air. Very sensitive people should watch for symptoms.' },
-  { key: 'moderate', label: 'Moderate', max: 200, color: '#f2c200', text: '#241c00',
-    advice: 'Breathing discomfort for people with asthma, heart or lung disease. Cut long outdoor exertion.' },
-  { key: 'poor', label: 'Poor', max: 300, color: '#f08a24', text: '#2a1400',
-    advice: 'Breathing discomfort for most people on prolonged exposure. Keep windows shut at peak hours.' },
-  { key: 'very_poor', label: 'Very Poor', max: 400, color: '#d7263d', text: '#ffffff',
-    advice: 'Respiratory illness on prolonged exposure. Move exercise indoors; wear an N95 outside.' },
-  { key: 'severe', label: 'Severe', max: Infinity, color: '#7b1e3b', text: '#ffffff',
-    advice: 'Affects healthy people and seriously impacts those with disease. Stay indoors with filtered air.' },
+  {
+    key: 'good',
+    label: 'Good',
+    max: 50,
+    color: '#2e9d4e',
+    text: '#ffffff',
+    advice: 'Air is clean. A great time to be outdoors and air out your home.',
+  },
+  {
+    key: 'satisfactory',
+    label: 'Satisfactory',
+    max: 100,
+    color: '#8cc63f',
+    text: '#10240a',
+    advice: 'Acceptable air. Very sensitive people should watch for symptoms.',
+  },
+  {
+    key: 'moderate',
+    label: 'Moderate',
+    max: 200,
+    color: '#f2c200',
+    text: '#241c00',
+    advice: 'Breathing discomfort for people with asthma, heart or lung disease. Cut long outdoor exertion.',
+  },
+  {
+    key: 'poor',
+    label: 'Poor',
+    max: 300,
+    color: '#f08a24',
+    text: '#2a1400',
+    advice: 'Breathing discomfort for most people on prolonged exposure. Keep windows shut at peak hours.',
+  },
+  {
+    key: 'very_poor',
+    label: 'Very Poor',
+    max: 400,
+    color: '#d7263d',
+    text: '#ffffff',
+    advice: 'Respiratory illness on prolonged exposure. Move exercise indoors; wear an N95 outside.',
+  },
+  {
+    key: 'severe',
+    label: 'Severe',
+    max: Infinity,
+    color: '#7b1e3b',
+    text: '#ffffff',
+    advice: 'Affects healthy people and seriously impacts those with disease. Stay indoors with filtered air.',
+  },
 ]);
 
 /**
@@ -48,7 +84,9 @@ export const BANDS = Object.freeze([
  * @returns {number} index value, rounded
  */
 function interpolate(c, table) {
-  if (!Number.isFinite(c) || c < 0) return NaN;
+  if (!Number.isFinite(c) || c < 0) {
+    return NaN;
+  }
   for (const [cLo, cHi, iLo, iHi] of table) {
     if (c <= cHi) {
       return Math.round(((iHi - iLo) / (cHi - cLo)) * (c - cLo) + iLo);
@@ -81,7 +119,9 @@ export function usAqiFromPm25(pm25) {
  * @returns {typeof BANDS[number]}
  */
 export function bandForIndex(index) {
-  if (!Number.isFinite(index)) return BANDS[0];
+  if (!Number.isFinite(index)) {
+    return BANDS[0];
+  }
   return BANDS.find((b) => index <= b.max) ?? BANDS[BANDS.length - 1];
 }
 

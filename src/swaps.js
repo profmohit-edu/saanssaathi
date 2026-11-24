@@ -6,17 +6,19 @@
  */
 import { householdDose, COMMUTE_MODES, INDOOR_SOURCES, UG_PER_CIGARETTE } from './exposure.js';
 import { hasMetro } from './local.js';
+import { DAYS_PER_WEEK, MIN_CO2_DELTA_KG, MIN_DOSE_DELTA_UG } from './config.js';
 
 const clone = (x) => structuredClone(x);
-const WEEK = 7;
 /** Typical one-way urban commute speed used to convert hours to km. */
 const KM_PER_COMMUTE_HOUR = 18;
+/** Commuting days per week. */
+const WORKING_DAYS = 5;
 
 /**
  * Swap definitions. `applies` decides relevance; `apply` mutates a clone.
  * @type {Array<{id:string, title:string|((s:State)=>string), category:'personal'|'home'|'community', cost:string,
  *   why:string, applies:(s:State)=>boolean, apply:(s:State)=>void}>}
- * @typedef {{members: object[], home: object, place?: object}} State
+ * @typedef {import('./types.js').Household} State
  */
 export const SWAPS = [
   {
@@ -26,9 +28,12 @@ export const SWAPS = [
     cost: '≈ ₹40–80 per mask',
     why: 'A sealed N95 filters most fine particles; cloth and loose surgical masks leak around the edges.',
     applies: (s) => s.members.some((m) => m.mask !== 'n95' && (m.outdoorHours > 0 || openCommute(m))),
-    apply: (s) => s.members.forEach((m) => {
-      if (m.outdoorHours > 0 || openCommute(m)) m.mask = 'n95';
-    }),
+    apply: (s) =>
+      s.members.forEach((m) => {
+        if (m.outdoorHours > 0 || openCommute(m)) {
+          m.mask = 'n95';
+        }
+      }),
   },
   {
     id: 'timing',
@@ -37,9 +42,12 @@ export const SWAPS = [
     cost: 'Free',
     why: 'Winter smog peaks after sunset and early morning, when cold air traps pollution near the ground. Afternoons are usually cleaner.',
     applies: (s) => s.members.some((m) => m.outdoorHours > 0 && m.outdoorTime !== 'best'),
-    apply: (s) => s.members.forEach((m) => {
-      if (m.outdoorHours > 0) m.outdoorTime = 'best';
-    }),
+    apply: (s) =>
+      s.members.forEach((m) => {
+        if (m.outdoorHours > 0) {
+          m.outdoorTime = 'best';
+        }
+      }),
   },
   {
     id: 'intensity',
@@ -48,22 +56,30 @@ export const SWAPS = [
     cost: 'Free',
     why: 'A runner breathes 3–6× more air per minute than someone resting, so the same air gives a much bigger dose.',
     applies: (s) => s.members.some((m) => m.outdoorActivity === 'vigorous' && m.outdoorHours > 0),
-    apply: (s) => s.members.forEach((m) => {
-      if (m.outdoorActivity === 'vigorous') m.outdoorActivity = 'light';
-    }),
+    apply: (s) =>
+      s.members.forEach((m) => {
+        if (m.outdoorActivity === 'vigorous') {
+          m.outdoorActivity = 'light';
+        }
+      }),
   },
   {
     id: 'metro',
-    title: (s) => (metroFor(s)
-      ? 'Switch two-wheeler/auto/car trips to the metro'
-      : 'Switch two-wheeler/auto/car trips to an AC bus or carpool'),
+    title: (s) =>
+      metroFor(s)
+        ? 'Switch two-wheeler/auto/car trips to the metro'
+        : 'Switch two-wheeler/auto/car trips to an AC bus or carpool',
     category: 'community',
     cost: 'Often cheaper than fuel',
     why: 'Open vehicles sit in the exhaust of the traffic around them. Filtered metro and AC-bus cabins cut what you breathe, and every switch takes exhaust off your street.',
     applies: (s) => s.members.some((m) => SWITCHABLE.includes(m.commuteMode)),
     apply: (s) => {
       const target = metroFor(s) ? 'metro' : 'bus';
-      s.members.forEach((m) => { if (SWITCHABLE.includes(m.commuteMode)) m.commuteMode = target; });
+      s.members.forEach((m) => {
+        if (SWITCHABLE.includes(m.commuteMode)) {
+          m.commuteMode = target;
+        }
+      });
     },
   },
   {
@@ -73,9 +89,12 @@ export const SWAPS = [
     cost: 'Free',
     why: 'Recirculation roughly halves in-cabin PM2.5 compared with fresh-air or open-window driving.',
     applies: (s) => s.members.some((m) => m.commuteMode === 'car_open'),
-    apply: (s) => s.members.forEach((m) => {
-      if (m.commuteMode === 'car_open') m.commuteMode = 'car_recirc';
-    }),
+    apply: (s) =>
+      s.members.forEach((m) => {
+        if (m.commuteMode === 'car_open') {
+          m.commuteMode = 'car_recirc';
+        }
+      }),
   },
   {
     id: 'seal',
@@ -84,7 +103,9 @@ export const SWAPS = [
     cost: 'Free (₹200 for draught tape)',
     why: 'Closed, taped windows cut how much outdoor smog gets in by roughly a third.',
     applies: (s) => s.home.windows !== 'closed',
-    apply: (s) => { s.home.windows = 'closed'; },
+    apply: (s) => {
+      s.home.windows = 'closed';
+    },
   },
   {
     id: 'purifier',
@@ -93,16 +114,20 @@ export const SWAPS = [
     cost: '≈ ₹3,000 DIY · ₹8,000+ purifier',
     why: 'A box fan taped to MERV-13 filters moves a lot of clean air for little money. Most of a day’s breathing happens in the bedroom.',
     applies: (s) => !s.home.purifier,
-    apply: (s) => { s.home.purifier = true; },
+    apply: (s) => {
+      s.home.purifier = true;
+    },
   },
   ...Object.entries(INDOOR_SOURCES).map(([key, src]) => ({
     id: `source_${key}`,
     title: sourceTitle(key, src.label),
-    category: key === 'biomass' || key === 'kerosene' ? 'community' : 'home',
+    category: /** @type {'community' | 'home'} */ (key === 'biomass' || key === 'kerosene' ? 'community' : 'home'),
     cost: sourceCost(key),
     why: sourceWhy(key),
     applies: (s) => (s.home.sources ?? []).includes(key),
-    apply: (s) => { s.home.sources = s.home.sources.filter((k) => k !== key); },
+    apply: (s) => {
+      s.home.sources = s.home.sources.filter((k) => k !== key);
+    },
   })),
 ];
 
@@ -127,36 +152,47 @@ function sourceTitle(key, label) {
 }
 
 function sourceCost(key) {
-  return { biomass: 'PMUY LPG subsidy may apply', kerosene: '≈ ₹1,500 heater', smoking: 'Saves money',
-    incense: 'Free', coil: '≈ ₹100 vaporiser', gas_no_exhaust: '≈ ₹1,500 exhaust fan' }[key] ?? 'Low';
+  return (
+    {
+      biomass: 'PMUY LPG subsidy may apply',
+      kerosene: '≈ ₹1,500 heater',
+      smoking: 'Saves money',
+      incense: 'Free',
+      coil: '≈ ₹100 vaporiser',
+      gas_no_exhaust: '≈ ₹1,500 exhaust fan',
+    }[key] ?? 'Low'
+  );
 }
 
 function sourceWhy(key) {
-  return {
-    biomass: 'Solid-fuel smoke is among the largest PM2.5 sources inside Indian homes and adds to neighbourhood winter smog.',
-    kerosene: 'Kerosene burning releases fine particles and NO₂ right where you breathe.',
-    smoking: 'Second-hand smoke lingers in closed winter rooms and hits children hardest.',
-    incense: 'One stick can briefly push indoor PM2.5 far above outdoor levels in a closed room.',
-    coil: 'One coil can emit as much fine particulate as dozens of cigarettes.',
-    gas_no_exhaust: 'Cooking fumes build up when the windows are closed for smog.',
-  }[key] ?? 'Removes an indoor emission source.';
+  return (
+    {
+      biomass:
+        'Solid-fuel smoke is among the largest PM2.5 sources inside Indian homes and adds to neighbourhood winter smog.',
+      kerosene: 'Kerosene burning releases fine particles and NO₂ right where you breathe.',
+      smoking: 'Second-hand smoke lingers in closed winter rooms and hits children hardest.',
+      incense: 'One stick can briefly push indoor PM2.5 far above outdoor levels in a closed room.',
+      coil: 'One coil can emit as much fine particulate as dozens of cigarettes.',
+      gas_no_exhaust: 'Cooking fumes build up when the windows are closed for smog.',
+    }[key] ?? 'Removes an indoor emission source.'
+  );
 }
 
 /**
  * Weekly commute CO₂ (kg) for the household.
- * @param {object[]} members
+ * @param {import('./types.js').Member[]} members
  */
 export function weeklyCommuteCo2(members) {
   return members.reduce((s, m) => {
     const mode = COMMUTE_MODES[m.commuteMode] ?? COMMUTE_MODES.none;
-    return s + mode.co2PerKm * KM_PER_COMMUTE_HOUR * (m.commuteHours || 0) * 5; // working days
+    return s + mode.co2PerKm * KM_PER_COMMUTE_HOUR * (m.commuteHours || 0) * WORKING_DAYS;
   }, 0);
 }
 
 /**
  * Scores every applicable swap against the baseline.
  * @param {State} state
- * @param {object} env from buildEnvironment
+ * @param {import('./types.js').Environment} env from buildEnvironment
  * @returns {Array<{id:string,title:string,category:string,cost:string,why:string,
  *   deltaUg:number, pct:number, cigarettesPerWeek:number, co2KgPerWeek:number,
  *   perMember:Array<{name:string, pct:number}>}>}
@@ -178,7 +214,7 @@ export function rankSwaps(state, env) {
         why: swap.why,
         deltaUg,
         pct: base.total > 0 ? (deltaUg / base.total) * 100 : 0,
-        cigarettesPerWeek: (deltaUg / UG_PER_CIGARETTE) * WEEK,
+        cigarettesPerWeek: (deltaUg / UG_PER_CIGARETTE) * DAYS_PER_WEEK,
         co2KgPerWeek: baseCo2 - weeklyCommuteCo2(next.members),
         perMember: base.perMember.map((b, i) => ({
           name: b.name,
@@ -186,14 +222,14 @@ export function rankSwaps(state, env) {
         })),
       };
     })
-    .filter((r) => r.deltaUg > 0.5 || r.co2KgPerWeek > 0.05)
+    .filter((r) => r.deltaUg > MIN_DOSE_DELTA_UG || r.co2KgPerWeek > MIN_CO2_DELTA_KG)
     .sort((a, b) => b.deltaUg - a.deltaUg);
 }
 
 /**
  * Applies a set of swaps together and returns the combined result.
  * @param {State} state
- * @param {object} env
+ * @param {import('./types.js').Environment} env
  * @param {string[]} ids
  */
 export function combine(state, env, ids) {

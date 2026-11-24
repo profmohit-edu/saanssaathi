@@ -3,6 +3,7 @@
  * @module environment
  */
 import { nextHours, mean, bestWindow, worstWindow, rushHourMean } from './windows.js';
+import { PEAK_WINDOW_HOURS } from './config.js';
 
 /** When members usually spend time outdoors. */
 export const OUTDOOR_SLOTS = Object.freeze({
@@ -32,17 +33,21 @@ function slotMean(pts, from, to) {
  */
 export function buildEnvironment(series, now = new Date()) {
   const day = nextHours(series, now, 24);
-  if (!day.length) throw new Error('No forecast hours available');
+  if (!day.length) {
+    throw new Error('No forecast hours available');
+  }
   const dailyMean = mean(day);
   const slots = Object.fromEntries(
-    Object.entries(OUTDOOR_SLOTS)
-      .filter(([, s]) => s.from !== null)
-      .map(([k, s]) => [k, slotMean(day, s.from, s.to)]),
+    Object.entries(OUTDOOR_SLOTS).flatMap(([k, s]) =>
+      s.from === null || s.to === null ? [] : [[k, slotMean(day, s.from, s.to)]],
+    ),
   );
   const bestCache = new Map();
   const bestFor = (hours) => {
     const len = Math.min(6, Math.max(1, Math.ceil(hours)));
-    if (!bestCache.has(len)) bestCache.set(len, bestWindow(day, len));
+    if (!bestCache.has(len)) {
+      bestCache.set(len, bestWindow(day, len));
+    }
     return bestCache.get(len);
   };
   return {
@@ -51,12 +56,14 @@ export function buildEnvironment(series, now = new Date()) {
     dailyMean,
     commuteMean: rushHourMean(day),
     slots,
-    peak: worstWindow(day, 3),
+    peak: worstWindow(day, PEAK_WINDOW_HOURS),
     bestFor,
     /** @param {{outdoorTime?:string, outdoorHours?:number}} m */
     outdoorMeanFor(m) {
-      if (m.outdoorTime === 'best') return bestFor(m.outdoorHours || 1)?.mean ?? dailyMean;
-      return slots[m.outdoorTime] ?? dailyMean;
+      if (m.outdoorTime === 'best') {
+        return bestFor(m.outdoorHours || 1)?.mean ?? dailyMean;
+      }
+      return (m.outdoorTime && slots[m.outdoorTime]) ?? dailyMean;
     },
   };
 }
@@ -69,9 +76,14 @@ export function buildEnvironment(series, now = new Date()) {
 export function parseOpenMeteo(json) {
   const t = json?.hourly?.time;
   const v = json?.hourly?.pm2_5;
-  if (!Array.isArray(t) || !Array.isArray(v)) throw new Error('Unexpected air-quality response');
+  if (!Array.isArray(t) || !Array.isArray(v)) {
+    throw new Error('Unexpected air-quality response');
+  }
   // timeformat=unixtime gives seconds since epoch, independent of the browser's zone.
   return t
     .map((ts, i) => ({ time: new Date(Number(ts) * 1000), pm25: v[i] }))
-    .filter((p) => Number.isFinite(p.pm25) && !Number.isNaN(p.time.getTime()));
+    .filter(
+      /** @returns {p is import('./types.js').HourPoint} */
+      (p) => Number.isFinite(p.pm25) && !Number.isNaN(p.time.getTime()),
+    );
 }

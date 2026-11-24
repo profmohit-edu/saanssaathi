@@ -4,10 +4,10 @@
  * @module api
  */
 
+import { AIR_CACHE_TTL_MS, AIR_TIMEOUT_MS } from './config.js';
+
 const GEO_URL = 'https://geocoding-api.open-meteo.com/v1/search';
 const AQ_URL = 'https://air-quality-api.open-meteo.com/v1/air-quality';
-const TTL_MS = 10 * 60 * 1000;
-const TIMEOUT_MS = 12000;
 const cache = new Map();
 
 /**
@@ -17,17 +17,23 @@ const cache = new Map();
  */
 async function getJson(url, fetchImpl = fetch) {
   const hit = cache.get(url);
-  if (hit && Date.now() - hit.at < TTL_MS) return hit.data;
+  if (hit && Date.now() - hit.at < AIR_CACHE_TTL_MS) {
+    return hit.data;
+  }
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => ctrl.abort(), AIR_TIMEOUT_MS);
   try {
     const res = await fetchImpl(url, { signal: ctrl.signal, referrerPolicy: 'no-referrer' });
-    if (!res.ok) throw new Error(`Air-quality service error (HTTP ${res.status})`);
+    if (!res.ok) {
+      throw new Error(`Air-quality service error (HTTP ${res.status})`);
+    }
     const data = await res.json();
     cache.set(url, { at: Date.now(), data });
     return data;
   } catch (e) {
-    if (e.name === 'AbortError') throw new Error('The air-quality service timed out. Check your connection and retry.');
+    if (/** @type {Error} */ (e).name === 'AbortError') {
+      throw new Error('The air-quality service timed out. Check your connection and retry.');
+    }
     throw e;
   } finally {
     clearTimeout(timer);
@@ -50,8 +56,12 @@ export function validCoords(lat, lon) {
  * @returns {Promise<Array<{name:string, admin1?:string, country?:string, latitude:number, longitude:number}>>}
  */
 export async function searchPlaces(query, fetchImpl) {
-  const q = String(query ?? '').trim().slice(0, 80);
-  if (q.length < 2) return [];
+  const q = String(query ?? '')
+    .trim()
+    .slice(0, 80);
+  if (q.length < 2) {
+    return [];
+  }
   const url = `${GEO_URL}?${new URLSearchParams({ name: q, count: '5', language: 'en', format: 'json' })}`;
   const data = await getJson(url, fetchImpl);
   return (data.results ?? []).filter((r) => validCoords(r.latitude, r.longitude));
@@ -64,7 +74,9 @@ export async function searchPlaces(query, fetchImpl) {
  * @param {typeof fetch} [fetchImpl]
  */
 export async function fetchAirQuality(lat, lon, fetchImpl) {
-  if (!validCoords(lat, lon)) throw new Error('Invalid coordinates');
+  if (!validCoords(lat, lon)) {
+    throw new Error('Invalid coordinates');
+  }
   const params = new URLSearchParams({
     latitude: lat.toFixed(3),
     longitude: lon.toFixed(3),

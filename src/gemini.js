@@ -8,10 +8,10 @@
  * @module gemini
  */
 
-export const DEFAULT_MODEL = 'gemini-3.6-flash';
+import { DEFAULT_MODEL, GEMINI_TIMEOUT_MS, isValidModel, MAX_QUESTION_LENGTH, CHAT_HISTORY_TURNS } from './config.js';
+
+export { DEFAULT_MODEL };
 export const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
-const TIMEOUT_MS = 30000;
-const MODEL_RE = /^[a-z0-9][a-z0-9.\-]{2,60}$/i;
 
 export const LANGUAGES = Object.freeze({
   en: 'English',
@@ -62,12 +62,12 @@ export const PLAN_SCHEMA = {
 
 /**
  * Compact, model-friendly context. Keeps the request small and quick.
- * @param {object} p
+ * @param {object} p context inputs
  * @param {string} p.place
- * @param {object} p.env
- * @param {object} p.state
- * @param {object} p.dose householdDose result
- * @param {object[]} p.swaps rankSwaps result
+ * @param {import('./types.js').Environment} p.env
+ * @param {import('./types.js').Household} p.state
+ * @param {ReturnType<typeof import('./exposure.js').householdDose>} p.dose
+ * @param {ReturnType<typeof import('./swaps.js').rankSwaps>} p.swaps
  */
 export function buildContext({ place, env, state, dose, swaps }) {
   const r = (n, d = 0) => Number(n.toFixed(d));
@@ -84,21 +84,32 @@ export function buildContext({ place, env, state, dose, swaps }) {
     },
     home: state.home,
     members: state.members.map((m, i) => ({
-      name: m.name, age: m.age, conditions: m.conditions, commute: m.commuteMode, commuteHours: m.commuteHours,
-      outdoorHours: m.outdoorHours, outdoorTime: m.outdoorTime, outdoorActivity: m.outdoorActivity, mask: m.mask,
-      inhaledUgPerDay: r(dose.perMember[i].total), cigaretteEquivalent: r(dose.perMember[i].cigarettes, 1),
+      name: m.name,
+      age: m.age,
+      conditions: m.conditions,
+      commute: m.commuteMode,
+      commuteHours: m.commuteHours,
+      outdoorHours: m.outdoorHours,
+      outdoorTime: m.outdoorTime,
+      outdoorActivity: m.outdoorActivity,
+      mask: m.mask,
+      inhaledUgPerDay: r(dose.perMember[i].total),
+      cigaretteEquivalent: r(dose.perMember[i].cigarettes, 1),
       timesWhoGuideline: r(dose.perMember[i].whoMultiple, 1),
     })),
     rankedSwaps: swaps.slice(0, 6).map((s) => ({
-      title: s.title, householdDoseCutPct: r(s.pct), cigarettesAvoidedPerWeek: r(s.cigarettesPerWeek, 1),
-      co2KgSavedPerWeek: r(s.co2KgPerWeek, 1), cost: s.cost,
+      title: s.title,
+      householdDoseCutPct: r(s.pct),
+      cigarettesAvoidedPerWeek: r(s.cigarettesPerWeek, 1),
+      co2KgSavedPerWeek: r(s.co2KgPerWeek, 1),
+      cost: s.cost,
     })),
   };
 }
 
 /**
  * Prompt for the structured day plan.
- * @param {object} context from buildContext
+ * @param {ReturnType<typeof buildContext>} context
  * @param {string} langCode
  */
 export function buildPlanPrompt(context, langCode = 'en') {
@@ -118,32 +129,103 @@ export function buildPlanPrompt(context, langCode = 'en') {
  * @param {string} text raw model text
  */
 export function parsePlan(text) {
-  if (typeof text !== 'string' || !text.trim()) throw new Error('Empty model response');
-  const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```$/, '');
+  if (typeof text !== 'string' || !text.trim()) {
+    throw new Error('Empty model response');
+  }
+  const cleaned = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/```$/, '');
   const obj = JSON.parse(cleaned);
   const str = (v, max = 600) => (typeof v === 'string' ? v.slice(0, max) : '');
-  if (!Array.isArray(obj.schedule)) throw new Error('Plan missing schedule');
+  if (!Array.isArray(obj.schedule)) {
+    throw new Error('Plan missing schedule');
+  }
   return {
     source: 'gemini',
     headline: str(obj.headline, 300),
-    schedule: obj.schedule.slice(0, 10).map((s) => ({ time: str(s.time, 40), title: str(s.title, 120), detail: str(s.detail) })),
-    perMember: (Array.isArray(obj.perMember) ? obj.perMember : []).slice(0, 12)
+    schedule: obj.schedule
+      .slice(0, 10)
+      .map((s) => ({ time: str(s.time, 40), title: str(s.title, 120), detail: str(s.detail) })),
+    perMember: (Array.isArray(obj.perMember) ? obj.perMember : [])
+      .slice(0, 12)
       .map((m) => ({ name: str(m.name, 60), advice: str(m.advice) })),
     impactStory: str(obj.impactStory, 1200),
   };
 }
 
 /**
- * Extracts text from a generateContent response.
- * @param {object} json
+ * Why the model returned nothing, if it said.
+ * @param {any} json
+ * @returns {string}
+ */
+function blockReason(json) {
+  const candidate = json?.candidates?.[0];
+  return json?.promptFeedback?.blockReason || candidate?.finishReason || '';
+}
+
+/**
+ * Extracts text from a generateContent response, skipping "thought" parts.
+ * @param {any} json
+ * @returns {string}
  */
 export function extractText(json) {
   const parts = json?.candidates?.[0]?.content?.parts;
   if (!Array.isArray(parts)) {
-    const reason = json?.promptFeedback?.blockReason || json?.candidates?.[0]?.finishReason;
+    const reason = blockReason(json);
     throw new Error(reason ? `Model returned no content (${reason})` : 'Model returned no content');
   }
-  return parts.filter((p) => !p.thought && typeof p.text === 'string').map((p) => p.text).join('');
+  return parts
+    .filter((p) => !p.thought && typeof p.text === 'string')
+    .map((p) => p.text)
+    .join('');
+}
+
+/** Output token caps per response type. */
+const MAX_TOKENS = Object.freeze({ plan: 4096, chat: 1536 });
+
+/**
+ * Builds the generateContent request body.
+ * @param {Array<{role:'user'|'model', text:string}>} turns
+ * @param {boolean} json request structured JSON matching PLAN_SCHEMA
+ */
+export function buildRequestBody(turns, json) {
+  return {
+    systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
+    contents: turns.map((t) => ({ role: t.role, parts: [{ text: t.text }] })),
+    generationConfig: json
+      ? { responseMimeType: 'application/json', responseSchema: PLAN_SCHEMA, maxOutputTokens: MAX_TOKENS.plan }
+      : { maxOutputTokens: MAX_TOKENS.chat },
+  };
+}
+
+/**
+ * Validates inputs before any network call.
+ * @param {unknown} apiKey
+ * @param {unknown} model
+ * @param {Array<{role: string}>} turns
+ */
+function assertRequest(apiKey, model, turns) {
+  if (!apiKey || typeof apiKey !== 'string') {
+    throw new Error('Add a Gemini API key in Settings to use AI features.');
+  }
+  if (!isValidModel(model)) {
+    throw new Error('Invalid model name');
+  }
+  if (turns.at(-1)?.role !== 'user') {
+    throw new Error('Last turn must be from the user');
+  }
+}
+
+/**
+ * Turns a failed HTTP response into a readable error.
+ * @param {number} status
+ * @param {any} data parsed body
+ */
+function httpError(status, data) {
+  const msg = data?.error?.message || `HTTP ${status}`;
+  const rejected = status === 400 || status === 403;
+  return new Error(rejected ? `Gemini rejected the request: ${msg}` : `Gemini error: ${msg}`);
 }
 
 /**
@@ -155,39 +237,30 @@ export function extractText(json) {
  * @param {boolean} [o.json] request JSON output with PLAN_SCHEMA
  * @param {typeof fetch} [o.fetchImpl]
  * @param {AbortSignal} [o.signal]
+ * @returns {Promise<string>}
  */
 export async function generate({ apiKey, model = DEFAULT_MODEL, turns, json = false, fetchImpl = fetch, signal }) {
-  if (!apiKey || typeof apiKey !== 'string') throw new Error('Add a Gemini API key in Settings to use AI features.');
-  if (!MODEL_RE.test(model)) throw new Error('Invalid model name');
-  if (!turns.length || turns[turns.length - 1].role !== 'user') throw new Error('Last turn must be from the user');
-
-  const body = {
-    systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
-    contents: turns.map((t) => ({ role: t.role, parts: [{ text: t.text }] })),
-    generationConfig: json
-      ? { responseMimeType: 'application/json', responseSchema: PLAN_SCHEMA, maxOutputTokens: 4096 }
-      : { maxOutputTokens: 1536 },
-  };
-
+  assertRequest(apiKey, model, turns);
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => ctrl.abort(), GEMINI_TIMEOUT_MS);
   signal?.addEventListener('abort', () => ctrl.abort(), { once: true });
   try {
     const res = await fetchImpl(`${API_BASE}/${encodeURIComponent(model)}:generateContent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-      body: JSON.stringify(body),
+      body: JSON.stringify(buildRequestBody(turns, json)),
       signal: ctrl.signal,
       referrerPolicy: 'no-referrer',
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const msg = data?.error?.message || `HTTP ${res.status}`;
-      throw new Error(res.status === 400 || res.status === 403 ? `Gemini rejected the request: ${msg}` : `Gemini error: ${msg}`);
+      throw httpError(res.status, data);
     }
     return extractText(data);
   } catch (e) {
-    if (e.name === 'AbortError') throw new Error('Gemini took too long to respond. Please try again.');
+    if (/** @type {Error} */ (e).name === 'AbortError') {
+      throw new Error('Gemini took too long to respond. Please try again.');
+    }
     throw e;
   } finally {
     clearTimeout(timer);
@@ -195,28 +268,44 @@ export async function generate({ apiKey, model = DEFAULT_MODEL, turns, json = fa
 }
 
 /**
+ * @typedef {object} CallOptions
+ * @property {string} apiKey
+ * @property {string} [model]
+ * @property {ReturnType<typeof buildContext>} context
+ * @property {string} lang
+ * @property {typeof fetch} [fetchImpl]
+ */
+
+/**
  * Generates a structured plan.
- * @param {object} o
+ * @param {CallOptions} o
  */
 export async function generatePlan({ apiKey, model, context, lang, fetchImpl }) {
-  const text = await generate({ apiKey, model, json: true, fetchImpl,
-    turns: [{ role: 'user', text: buildPlanPrompt(context, lang) }] });
+  const text = await generate({
+    apiKey,
+    model,
+    json: true,
+    fetchImpl,
+    turns: [{ role: 'user', text: buildPlanPrompt(context, lang) }],
+  });
   return parsePlan(text);
 }
 
 /**
  * Chat turn, grounded in the same context.
- * @param {object} o
- * @param {Array<{role:'user'|'model', text:string}>} o.history prior turns
- * @param {string} o.question
+ * @param {CallOptions & {history: Array<{role:'user'|'model', text:string}>, question: string}} o
  */
 export async function ask({ apiKey, model, context, lang, history, question, fetchImpl }) {
-  const q = String(question).slice(0, 1000);
+  const q = String(question).slice(0, MAX_QUESTION_LENGTH);
   const langName = LANGUAGES[lang] ?? LANGUAGES.en;
+  /** @type {Array<{role: 'user'|'model', text: string}>} */
   const turns = [
-    { role: 'user', text: `Context for this conversation (JSON):\n${JSON.stringify(context)}\nReply in ${langName}. Keep answers under 150 words.` },
+    {
+      role: 'user',
+      text: `Context for this conversation (JSON):\n${JSON.stringify(context)}\nReply in ${langName}. Keep answers under 150 words.`,
+    },
     { role: 'model', text: 'Understood. I will answer using these numbers.' },
-    ...history.slice(-8),
+    ...history.slice(-CHAT_HISTORY_TURNS),
     { role: 'user', text: q },
   ];
   return generate({ apiKey, model, turns, fetchImpl });

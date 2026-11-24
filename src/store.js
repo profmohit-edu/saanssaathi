@@ -6,12 +6,12 @@
  */
 import { AGE_GROUPS, COMMUTE_MODES, MASKS, OUTDOOR_ACTIVITY, INDOOR_SOURCES } from './exposure.js';
 import { OUTDOOR_SLOTS } from './environment.js';
+import { CONDITIONS } from './format.js';
+import { MAX_MEMBERS, MAX_NAME_LENGTH, MAX_COMMUTE_HOURS, MAX_OUTDOOR_HOURS } from './config.js';
 
 const KEY = 'saans.household.v1';
 const KEY_API = 'saans.gemini.key';
 const KEY_PREFS = 'saans.prefs.v1';
-export const CONDITIONS = Object.freeze({ asthma: 'Asthma / COPD', heart: 'Heart condition', pregnant: 'Pregnant' });
-const MAX_MEMBERS = 10;
 
 let seq = 0;
 /** Unique-enough id. */
@@ -19,66 +19,166 @@ export const uid = () => `m${Date.now().toString(36)}${(seq++).toString(36)}`;
 
 /** A blank member. */
 export function newMember(name = 'Me') {
-  return { id: uid(), name, age: 'adult', conditions: [], commuteMode: 'none', commuteHours: 0,
-    outdoorHours: 1, outdoorTime: 'morning', outdoorActivity: 'light', mask: 'none' };
+  return {
+    id: uid(),
+    name,
+    age: 'adult',
+    conditions: [],
+    commuteMode: 'none',
+    commuteHours: 0,
+    outdoorHours: 1,
+    outdoorTime: 'morning',
+    outdoorActivity: 'light',
+    mask: 'none',
+  };
 }
 
 /** Demo household: a Delhi joint family. */
+/**
+ * @returns {import('./types.js').Household & {place: import('./types.js').Place}}
+ */
 export function demoState() {
   return {
     place: { name: 'New Delhi', admin1: 'Delhi', country: 'India', latitude: 28.6139, longitude: 77.209 },
     home: { windows: 'open', purifier: false, sources: ['incense', 'coil'] },
     members: [
-      { ...newMember('Rahul'), commuteMode: 'two_wheeler', commuteHours: 1.5, outdoorHours: 1,
-        outdoorTime: 'morning', outdoorActivity: 'vigorous', mask: 'cloth' },
+      {
+        ...newMember('Rahul'),
+        commuteMode: 'two_wheeler',
+        commuteHours: 1.5,
+        outdoorHours: 1,
+        outdoorTime: 'morning',
+        outdoorActivity: 'vigorous',
+        mask: 'cloth',
+      },
       { ...newMember('Priya'), commuteMode: 'none', outdoorHours: 0.5, outdoorTime: 'evening' },
-      { ...newMember('Aarav'), age: 'child', commuteMode: 'bus', commuteHours: 1, outdoorHours: 2,
-        outdoorTime: 'evening', outdoorActivity: 'moderate' },
-      { ...newMember('Dadi'), age: 'senior', conditions: ['asthma'], outdoorHours: 1,
-        outdoorTime: 'morning', outdoorActivity: 'light' },
+      {
+        ...newMember('Aarav'),
+        age: 'child',
+        commuteMode: 'bus',
+        commuteHours: 1,
+        outdoorHours: 2,
+        outdoorTime: 'evening',
+        outdoorActivity: 'moderate',
+      },
+      {
+        ...newMember('Dadi'),
+        age: 'senior',
+        conditions: ['asthma'],
+        outdoorHours: 1,
+        outdoorTime: 'morning',
+        outdoorActivity: 'light',
+      },
     ],
   };
 }
 
-const pick = (v, allowed, fallback) => (Object.hasOwn(allowed, v) ? v : fallback);
-const num = (v, lo, hi, d) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d;
+/**
+ * Returns `value` if it is a key of `allowed`, else `fallback`.
+ * @param {unknown} value
+ * @param {object} allowed
+ * @param {string} fallback
+ * @returns {string}
+ */
+const pick = (value, allowed, fallback) =>
+  typeof value === 'string' && Object.hasOwn(allowed, value) ? value : fallback;
+
+/**
+ * Clamps a numeric value, falling back when it is not a number.
+ * @param {unknown} value
+ * @param {number} lo
+ * @param {number} hi
+ * @param {number} fallback
+ */
+const clamp = (value, lo, hi, fallback) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fallback;
 };
 
 /**
- * Validates untrusted state (from storage or URL).
+ * Keeps only array items that are keys of `allowed`, without duplicates.
+ * @param {unknown} list
+ * @param {object} allowed
+ * @returns {string[]}
+ */
+const keysOf = (list, allowed) =>
+  Array.isArray(list) ? [...new Set(list.filter((k) => typeof k === 'string' && Object.hasOwn(allowed, k)))] : [];
+
+const MAX_PLACE_TEXT = 80;
+const ID_PATTERN = /^[\w-]{1,40}$/;
+const CONTROL_CHARS = /[\u0000-\u001f]/g;
+
+/**
  * @param {any} raw
+ * @param {import('./types.js').Place} fallback
+ * @returns {import('./types.js').Place}
+ */
+function sanitizePlace(raw, fallback) {
+  if (!raw || !Number.isFinite(raw.latitude) || !Number.isFinite(raw.longitude)) {
+    return fallback;
+  }
+  const text = (/** @type {unknown} */ v) => String(v ?? '').slice(0, MAX_PLACE_TEXT);
+  return {
+    name: text(raw.name),
+    admin1: text(raw.admin1),
+    country: text(raw.country),
+    latitude: clamp(raw.latitude, -90, 90, fallback.latitude),
+    longitude: clamp(raw.longitude, -180, 180, fallback.longitude),
+  };
+}
+
+/**
+ * @param {any} raw
+ * @returns {import('./types.js').Home}
+ */
+function sanitizeHome(raw) {
+  return {
+    windows: raw?.windows === 'closed' ? 'closed' : 'open',
+    purifier: Boolean(raw?.purifier),
+    sources: keysOf(raw?.sources, INDOOR_SOURCES),
+  };
+}
+
+/**
+ * @param {any} m
+ * @returns {import('./types.js').Member}
+ */
+function sanitizeMember(m) {
+  const src = m && typeof m === 'object' ? m : {};
+  const name = String(src.name ?? '')
+    .replace(CONTROL_CHARS, '')
+    .trim()
+    .slice(0, MAX_NAME_LENGTH);
+  return {
+    id: typeof src.id === 'string' && ID_PATTERN.test(src.id) ? src.id : uid(),
+    name: name || 'Member',
+    age: pick(src.age, AGE_GROUPS, 'adult'),
+    conditions: keysOf(src.conditions, CONDITIONS),
+    commuteMode: pick(src.commuteMode, COMMUTE_MODES, 'none'),
+    commuteHours: clamp(src.commuteHours, 0, MAX_COMMUTE_HOURS, 0),
+    outdoorHours: clamp(src.outdoorHours, 0, MAX_OUTDOOR_HOURS, 0),
+    outdoorTime: pick(src.outdoorTime, OUTDOOR_SLOTS, 'morning'),
+    outdoorActivity: pick(src.outdoorActivity, OUTDOOR_ACTIVITY, 'light'),
+    mask: pick(src.mask, MASKS, 'none'),
+  };
+}
+
+/**
+ * Validates untrusted state (from storage or URL): whitelists every enum,
+ * clamps numbers, strips control characters and caps list sizes.
+ * @param {any} raw
+ * @returns {import('./types.js').Household & {place: import('./types.js').Place}}
  */
 export function sanitizeState(raw) {
   const base = demoState();
-  if (!raw || typeof raw !== 'object') return base;
-  const home = raw.home ?? {};
+  if (!raw || typeof raw !== 'object') {
+    return base;
+  }
   const members = Array.isArray(raw.members) ? raw.members.slice(0, MAX_MEMBERS) : base.members;
-  const place = raw.place && Number.isFinite(raw.place.latitude) && Number.isFinite(raw.place.longitude)
-    ? { name: String(raw.place.name ?? '').slice(0, 80), admin1: String(raw.place.admin1 ?? '').slice(0, 80),
-      country: String(raw.place.country ?? '').slice(0, 80),
-      latitude: num(raw.place.latitude, -90, 90, 28.6), longitude: num(raw.place.longitude, -180, 180, 77.2) }
-    : base.place;
   return {
-    place,
-    home: {
-      windows: home.windows === 'closed' ? 'closed' : 'open',
-      purifier: Boolean(home.purifier),
-      sources: Array.isArray(home.sources) ? [...new Set(home.sources.filter((s) => Object.hasOwn(INDOOR_SOURCES, s)))] : [],
-    },
-    members: members.map((m) => ({
-      id: typeof m?.id === 'string' && /^[\w-]{1,40}$/.test(m.id) ? m.id : uid(),
-      name: String(m?.name ?? 'Member').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 30) || 'Member',
-      age: pick(m?.age, AGE_GROUPS, 'adult'),
-      conditions: Array.isArray(m?.conditions) ? m.conditions.filter((c) => Object.hasOwn(CONDITIONS, c)) : [],
-      commuteMode: pick(m?.commuteMode, COMMUTE_MODES, 'none'),
-      commuteHours: num(m?.commuteHours, 0, 6, 0),
-      outdoorHours: num(m?.outdoorHours, 0, 12, 0),
-      outdoorTime: pick(m?.outdoorTime, OUTDOOR_SLOTS, 'morning'),
-      outdoorActivity: pick(m?.outdoorActivity, OUTDOOR_ACTIVITY, 'light'),
-      mask: pick(m?.mask, MASKS, 'none'),
-    })),
+    place: sanitizePlace(raw.place, base.place),
+    home: sanitizeHome(raw.home),
+    members: members.map(sanitizeMember),
   };
 }
 
@@ -139,6 +239,8 @@ export function saveApiKey(key, remember) {
   const ls = safeStorage('localStorage');
   ss?.removeItem(KEY_API);
   ls?.removeItem(KEY_API);
-  if (!clean) return;
+  if (!clean) {
+    return;
+  }
   (remember ? ls : ss)?.setItem(KEY_API, clean);
 }

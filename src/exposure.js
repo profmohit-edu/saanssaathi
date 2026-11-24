@@ -63,7 +63,9 @@ export const OUTDOOR_ACTIVITY = Object.freeze({
 /** Indoor-to-outdoor infiltration ratio. */
 export function infiltrationRatio(home) {
   const closed = home.windows === 'closed';
-  if (home.purifier) return closed ? 0.3 : 0.75;
+  if (home.purifier) {
+    return closed ? 0.3 : 0.75;
+  }
   return closed ? 0.6 : 0.9;
 }
 
@@ -85,7 +87,7 @@ const clampHours = (h) => Math.min(24, Math.max(0, Number(h) || 0));
 
 /**
  * Normalises a member's routine so hours never exceed 24.
- * @param {object} m member
+ * @param {import('./types.js').Member} m member
  */
 export function normaliseMember(m) {
   const commuteHours = m.commuteMode === 'none' ? 0 : Math.min(24 - SLEEP_HOURS, clampHours(m.commuteHours));
@@ -94,57 +96,93 @@ export function normaliseMember(m) {
 }
 
 /**
+ * Concentrations the dose model needs (µg/m³). `outdoorMeanFor` resolves the
+ * outdoor level for a member's chosen time of day.
+ * @typedef {{dailyMean: number, outdoorMean?: number, commuteMean?: number,
+ *   outdoorMeanFor?: (m: any) => number}} DoseEnv
+ */
+
+/** WHO 2021 24-hour PM2.5 guideline, µg/m³ (mirrors aqi.js to avoid a cycle). */
+const WHO_GUIDELINE = 15;
+/** Fraction of indoor-generated PM2.5 a running purifier removes. */
+const PURIFIER_SOURCE_FACTOR = 0.5;
+/** In-cabin ratio above which a commute counts as "open air" (masks worn). */
+const OPEN_CABIN_RATIO = 0.8;
+
+/**
+ * Resolves the outdoor, commute and indoor concentrations for a member.
+ * @param {ReturnType<typeof normaliseMember>} m
+ * @param {import('./types.js').Home} home
+ * @param {{dailyMean:number, outdoorMean?:number, commuteMean?:number, outdoorMeanFor?:(m:any)=>number}} env
+ */
+export function concentrations(m, home, env) {
+  const daily = Math.max(0, env.dailyMean);
+  const outdoorRaw = typeof env.outdoorMeanFor === 'function' ? env.outdoorMeanFor(m) : env.outdoorMean;
+  const sourceAdd = (home.sources ?? []).reduce((sum, k) => sum + (INDOOR_SOURCES[k]?.add ?? 0), 0);
+  return {
+    outdoor: Math.max(0, Number.isFinite(outdoorRaw) ? Number(outdoorRaw) : daily),
+    commute: Math.max(0, env.commuteMean ?? daily),
+    indoor: daily * infiltrationRatio(home) + sourceAdd * (home.purifier ? PURIFIER_SOURCE_FACTOR : 1),
+  };
+}
+
+/**
+ * Looks up the profile tables for a member, with safe defaults.
+ * @param {ReturnType<typeof normaliseMember>} m
+ */
+function profileOf(m) {
+  return {
+    factor: (AGE_GROUPS[m.age] ?? AGE_GROUPS.adult).factor,
+    mode: COMMUTE_MODES[m.commuteMode] ?? COMMUTE_MODES.none,
+    penetration: (MASKS[m.mask] ?? MASKS.none).penetration,
+    outdoorRate: BREATHING[m.outdoorActivity] ?? BREATHING.light,
+  };
+}
+
+/**
  * Computes a member's daily inhaled PM2.5 dose.
- * @param {object} member {age, commuteMode, commuteHours, outdoorHours, outdoorActivity, mask}
- * @param {object} home {windows, purifier, sources: string[]}
+ * @param {import('./types.js').Member} member
+ * @param {import('./types.js').Home} home
  * @param {{dailyMean:number, outdoorMean?:number, commuteMean?:number,
  *   outdoorMeanFor?:(m:object)=>number}} env µg/m³; outdoorMeanFor resolves when a member is outside
  * @returns {{total:number, volume:number, parts:Record<string,number>, cigarettes:number, whoMultiple:number, avgConc:number}}
  */
 export function computeDose(member, home, env) {
   const m = normaliseMember(member);
-  const age = AGE_GROUPS[m.age] ?? AGE_GROUPS.adult;
-  const mode = COMMUTE_MODES[m.commuteMode] ?? COMMUTE_MODES.none;
-  const mask = MASKS[m.mask] ?? MASKS.none;
-  const f = age.factor;
-
-  const daily = Math.max(0, env.dailyMean);
-  const outdoorRaw = typeof env.outdoorMeanFor === 'function' ? env.outdoorMeanFor(m) : env.outdoorMean;
-  const outdoorC = Math.max(0, Number.isFinite(outdoorRaw) ? outdoorRaw : daily);
-  const commuteC = Math.max(0, env.commuteMean ?? daily);
-  const sourceAdd = (home.sources ?? []).reduce((s, k) => s + (INDOOR_SOURCES[k]?.add ?? 0), 0);
-  // A purifier also scrubs part of what is generated indoors.
-  const indoorC = daily * infiltrationRatio(home) + sourceAdd * (home.purifier ? 0.5 : 1);
-
-  const indoorAwakeHours = Math.max(0, 24 - SLEEP_HOURS - m.commuteHours - m.outdoorHours);
-  const maskedCommute = mode.ratio > 0.8 ? mask.penetration : 1; // masks rarely worn in closed cabins
-  const outdoorRate = BREATHING[m.outdoorActivity] ?? BREATHING.light;
+  const { factor, mode, penetration, outdoorRate } = profileOf(m);
+  const c = concentrations(m, home, env);
+  const awakeIndoors = Math.max(0, 24 - SLEEP_HOURS - m.commuteHours - m.outdoorHours);
+  const commuteMask = mode.ratio > OPEN_CABIN_RATIO ? penetration : 1;
+  const commuteRate = BREATHING[mode.activity];
 
   const parts = {
-    sleep: indoorC * BREATHING.sleep * f * SLEEP_HOURS,
-    indoors: indoorC * BREATHING.rest * f * indoorAwakeHours,
-    commute: commuteC * mode.ratio * maskedCommute * BREATHING[mode.activity] * f * m.commuteHours,
-    outdoors: outdoorC * mask.penetration * outdoorRate * f * m.outdoorHours,
+    sleep: c.indoor * BREATHING.sleep * factor * SLEEP_HOURS,
+    indoors: c.indoor * BREATHING.rest * factor * awakeIndoors,
+    commute: c.commute * mode.ratio * commuteMask * commuteRate * factor * m.commuteHours,
+    outdoors: c.outdoor * penetration * outdoorRate * factor * m.outdoorHours,
   };
-  const volume = f * (BREATHING.sleep * SLEEP_HOURS + BREATHING.rest * indoorAwakeHours
-    + BREATHING[mode.activity] * m.commuteHours + outdoorRate * m.outdoorHours);
+  const volume =
+    factor *
+    (BREATHING.sleep * SLEEP_HOURS +
+      BREATHING.rest * awakeIndoors +
+      commuteRate * m.commuteHours +
+      outdoorRate * m.outdoorHours);
   const total = Object.values(parts).reduce((a, b) => a + b, 0);
-  const whoDose = 15 * volume;
   return {
     total,
     volume,
     parts,
     avgConc: volume > 0 ? total / volume : 0,
     cigarettes: total / UG_PER_CIGARETTE,
-    whoMultiple: whoDose > 0 ? total / whoDose : 0,
+    whoMultiple: volume > 0 ? total / (WHO_GUIDELINE * volume) : 0,
   };
 }
 
 /**
  * Household totals.
- * @param {object[]} members
- * @param {object} home
- * @param {object} env
+ * @param {import('./types.js').Member[]} members
+ * @param {import('./types.js').Home} home
+ * @param {DoseEnv} env
  */
 export function householdDose(members, home, env) {
   const perMember = members.map((m) => ({ id: m.id, name: m.name, ...computeDose(m, home, env) }));

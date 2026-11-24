@@ -20,9 +20,7 @@
 export function nextHours(series, now, hours = 24) {
   const start = new Date(now);
   start.setMinutes(0, 0, 0);
-  return series
-    .filter((p) => p.time >= start && Number.isFinite(p.pm25))
-    .slice(0, hours);
+  return series.filter((p) => p.time >= start && Number.isFinite(p.pm25)).slice(0, hours);
 }
 
 /**
@@ -30,7 +28,9 @@ export function nextHours(series, now, hours = 24) {
  * @param {HourPoint[]} pts
  */
 export function mean(pts) {
-  if (!pts.length) return NaN;
+  if (!pts.length) {
+    return NaN;
+  }
   return pts.reduce((s, p) => s + p.pm25, 0) / pts.length;
 }
 
@@ -42,6 +42,7 @@ export function mean(pts) {
  * @returns {{start: Date, end: Date, mean: number} | null}
  */
 export function bestWindow(pts, length, { fromHour = 6, toHour = 22 } = {}) {
+  /** @type {{start: Date, end: Date, mean: number} | null} */
   let best = null;
   for (let i = 0; i + length <= pts.length; i++) {
     const slice = pts.slice(i, i + length);
@@ -49,8 +50,10 @@ export function bestWindow(pts, length, { fromHour = 6, toHour = 22 } = {}) {
       const h = p.time.getHours();
       return h >= fromHour && h < toHour;
     });
-    const contiguous = slice.every((p, j) => j === 0 || p.time - slice[j - 1].time === 3600000);
-    if (!okHours || !contiguous) continue;
+    const contiguous = slice.every((p, j) => j === 0 || p.time.getTime() - slice[j - 1].time.getTime() === 3600000);
+    if (!okHours || !contiguous) {
+      continue;
+    }
     const m = mean(slice);
     if (!best || m < best.mean) {
       best = { start: slice[0].time, end: new Date(slice[length - 1].time.getTime() + 3600000), mean: m };
@@ -65,6 +68,7 @@ export function bestWindow(pts, length, { fromHour = 6, toHour = 22 } = {}) {
  * @param {number} length
  */
 export function worstWindow(pts, length) {
+  /** @type {{start: Date, end: Date, mean: number} | null} */
   let worst = null;
   for (let i = 0; i + length <= pts.length; i++) {
     const slice = pts.slice(i, i + length);

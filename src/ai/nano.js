@@ -115,25 +115,58 @@ export function nanoAsk(session, question) {
   return session.prompt(`${String(question).slice(0, 1000)}\nAnswer in under 150 words using the household numbers.`);
 }
 
+/** One translator promise per target language, created inside the click. */
+const translators = new Map();
+
 /**
- * Translates text on-device. Returns the input unchanged for English or when
- * the language pair is unavailable.
+ * Starts creating (and if needed downloading) a translator. Call this
+ * synchronously from the click handler: Chrome only allows the one-time
+ * language-pack download during a user gesture.
+ * @param {string} target BCP-47 language code
+ * @param {BuiltInAI} [ai]
+ * @returns {Promise<{translate: (s: string) => Promise<string>} | null>}
+ */
+export function warmTranslator(target, ai = browserAI()) {
+  if (target === 'en' || !ai.Translator?.create) {
+    return Promise.resolve(null);
+  }
+  if (!translators.has(target)) {
+    const pair = { sourceLanguage: 'en', targetLanguage: target };
+    const ready = Promise.resolve(ai.Translator.availability(pair))
+      .then((status) => (status === 'unavailable' ? null : ai.Translator.create(pair)))
+      .catch(() => null);
+    translators.set(target, ready);
+  }
+  return translators.get(target);
+}
+
+/** Forgets cached translators (used in tests). */
+export function resetTranslators() {
+  translators.clear();
+}
+
+/**
+ * Translates text on-device. Returns the input unchanged for English, when the
+ * language pair is unavailable, or if translation fails.
  * @param {string} text
  * @param {string} target BCP-47 language code
  * @param {BuiltInAI} [ai]
  * @returns {Promise<string>}
  */
 export async function translate(text, target, ai = browserAI()) {
-  if (!text || target === 'en' || !ai.Translator?.create) {
+  if (!text) {
     return text;
   }
-  const pair = { sourceLanguage: 'en', targetLanguage: target };
-  const status = await ai.Translator.availability(pair).catch(() => 'unavailable');
-  if (status === 'unavailable') {
+  const translator = await warmTranslator(target, ai);
+  if (!translator) {
     return text;
   }
-  const translator = await ai.Translator.create(pair);
-  return translator.translate(text);
+  try {
+    return await translator.translate(text);
+  } catch {
+    translators.delete(target);
+    return text;
+  }
 }
 
 /**
@@ -146,6 +179,9 @@ export async function translate(text, target, ai = browserAI()) {
 export async function translatePlan(plan, target, ai = browserAI()) {
   if (target === 'en') {
     return plan;
+  }
+  if (!(await warmTranslator(target, ai))) {
+    return { ...plan, lang: 'en' }; // language pack unavailable: keep English
   }
   const t = (/** @type {string | undefined} */ s) => translate(s ?? '', target, ai);
   const [headline, impactStory] = await Promise.all([t(plan.headline), t(plan.impactStory)]);

@@ -8,7 +8,16 @@
  */
 import { generatePlan, ask } from '../gemini.js';
 import { DEFAULT_MODEL } from '../config.js';
-import { nanoAvailability, createNanoSession, nanoPlan, nanoAsk, translate, translatePlan, browserAI } from './nano.js';
+import {
+  nanoAvailability,
+  createNanoSession,
+  nanoPlan,
+  nanoAsk,
+  translate,
+  translatePlan,
+  warmTranslator,
+  browserAI,
+} from './nano.js';
 
 /** @typedef {'cloud'|'nano'|'none'} ProviderKind */
 
@@ -84,6 +93,7 @@ export async function planWith({ provider, apiKey, model, context, lang, onProgr
     return { ...plan, source: 'gemini', lang };
   }
   if (provider === 'nano') {
+    warmTranslator(lang, ai); // start language-pack download while the click still counts
     const session = await nanoSessionFor(context, onProgress, ai);
     return translatePlan(await nanoPlan(session, context), lang, ai);
   }
@@ -111,6 +121,7 @@ export async function askWith({
     return ask({ apiKey, model: model || DEFAULT_MODEL, context, lang, history, question, fetchImpl });
   }
   if (provider === 'nano') {
+    warmTranslator(lang, ai);
     const session = await nanoSessionFor(context, onProgress, ai);
     return translate(await nanoAsk(session, question), lang, ai);
   }

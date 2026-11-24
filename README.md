@@ -40,26 +40,48 @@ SaansSaathi ("breath companion" in Hindi: saans = breath, saathi = companion) is
 ## Architecture
 
 ```
-index.html            semantic shell, strict CSP, no inline JS/CSS
-styles.css            responsive, high-contrast, reduced-motion aware
+index.html              semantic shell, strict CSP, no inline JS/CSS
+styles.css              responsive, high-contrast, reduced-motion aware
 src/
-  app.js              UI controller (state → model → view)
-  api.js              Open-Meteo clients: timeout, TTL cache, validation
-  environment.js      forecast → environment (slots, rush hour, best windows)
-  windows.js          clean-air / peak / ventilation window detection
-  exposure.js         Breath Budget dose model
-  swaps.js            what-if simulator & ranking
-  engine.js           offline planner, health alerts, hacks, myths
-  gemini.js           Gemini prompts, schema, REST client, parsing
-  aqi.js              NAQI + US EPA (2024) PM2.5 indices
-  chart.js            dependency-free SVG chart + table
-  dom.js              XSS-safe DOM builder & rich-text tokenizer
-  store.js            validated persistence (localStorage / sessionStorage)
-  local.js            city tailoring: metro availability, local complaint channels
-tests/                53 node:test unit tests (96% line coverage), no dependencies
+  app.js                controller: owns state, runs the model, triggers renders
+  config.js             every tunable constant (timeouts, limits, thresholds)
+  types.js              shared JSDoc types (checked by the TypeScript compiler)
+  format.js             pure formatting helpers
+  ui/
+    air-view.js         place search, live reading, 24 h chart
+    household-view.js   home settings and member cards
+    results-view.js     Breath Budget, swap simulator, plan, guidance
+    assistant-view.js   Gemini plan, grounded chat, settings dialog
+  api.js                Open-Meteo clients: timeout, TTL cache, validation
+  environment.js        forecast → environment (slots, rush hour, best windows)
+  windows.js            clean-air / peak / ventilation window detection
+  exposure.js           Breath Budget dose model
+  swaps.js              what-if simulator & ranking
+  engine.js             offline planner, rule-based health alerts, hacks, myths
+  gemini.js             Gemini prompts, schema, REST client, parsing
+  aqi.js                NAQI + US EPA (2024) PM2.5 indices
+  local.js              city tailoring: metro availability, complaint channels
+  chart.js              dependency-free SVG chart + table
+  dom.js                XSS-safe DOM builder & rich-text tokenizer
+  store.js              validated persistence (localStorage / sessionStorage)
+tests/                  61 node:test unit tests, no runtime dependencies
 ```
 
+The model layer (`exposure`, `swaps`, `environment`, `engine`, `gemini`) has no DOM code and is unit-tested directly. Views only render state and report edits back to the controller through a small `actions` interface.
+
 No framework, no build step and no runtime dependencies. The page is under 100 KB.
+
+## Code quality
+
+| Check | Tool | Command |
+|---|---|---|
+| Lint (no errors, complexity ≤ 12, max 250 lines/file) | ESLint 10 | `npm run lint` |
+| Formatting | Prettier | `npm run format:check` |
+| Static types (strict, `checkJs`) | TypeScript | `npm run typecheck` |
+| Unit tests + coverage | `node:test` | `npm run test:coverage` |
+| Everything | | `npm run check` |
+
+GitHub Actions runs all four on every push.
 
 ### The exposure model
 
@@ -91,7 +113,8 @@ Skip link, landmarks, labelled form controls, `aria-live` result regions, keyboa
 ## Run locally
 
 ```bash
-npm test          # 53 unit tests (Node ≥ 20, zero dependencies)
+npm install       # dev tools only: eslint, prettier, typescript
+npm run check     # lint + format + types + 61 unit tests
 npm start         # serves on http://localhost:8080
 ```
 

@@ -1,0 +1,62 @@
+/**
+ * ESLint flat config. No plugins, so it runs with a bare `eslint` install.
+ */
+const browser = Object.fromEntries(
+  [
+    'window',
+    'document',
+    'navigator',
+    'fetch',
+    'AbortController',
+    'URLSearchParams',
+    'Intl',
+    'Node',
+    'HTMLElement',
+    'HTMLInputElement',
+    'HTMLSelectElement',
+    'HTMLButtonElement',
+    'HTMLDialogElement',
+    'matchMedia',
+    'setTimeout',
+    'clearTimeout',
+    'structuredClone',
+    'globalThis',
+    'console',
+    'localStorage',
+    'sessionStorage',
+    'NodeFilter',
+  ].map((g) => [g, 'readonly']),
+);
+
+export default [
+  { ignores: ['node_modules/**', 'coverage/**'] },
+  {
+    files: ['**/*.js'],
+    languageOptions: { ecmaVersion: 2024, sourceType: 'module', globals: browser },
+    rules: {
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      'no-undef': 'error',
+      'no-var': 'error',
+      'prefer-const': 'error',
+      eqeqeq: ['error', 'always'],
+      curly: ['error', 'all'],
+      'no-implicit-globals': 'error',
+      'no-shadow': 'error',
+      'no-param-reassign': ['error', { props: false }],
+      'no-eval': 'error',
+      'no-implied-eval': 'error',
+      'no-new-func': 'error',
+      'no-console': 'error',
+      'no-duplicate-imports': 'error',
+      'no-unreachable': 'error',
+      'no-constant-condition': 'error',
+      'consistent-return': 'error',
+      'default-param-last': 'error',
+      'prefer-template': 'error',
+      'object-shorthand': 'error',
+      complexity: ['warn', 12],
+      'max-depth': ['error', 3],
+      'max-lines': ['error', { max: 250, skipBlankLines: true, skipComments: true }],
+    },
+  },
+];

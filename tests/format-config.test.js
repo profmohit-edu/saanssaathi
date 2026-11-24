@@ -103,3 +103,27 @@ test('concentrations: purifier halves indoor sources, timing overrides outdoor l
   assert.equal(plain.commute, 120);
   assert.ok(filtered.indoor < plain.indoor);
 });
+
+test('planToText produces a shareable summary', async () => {
+  const { planToText } = await import('../src/format.js');
+  const text = planToText(
+    {
+      source: 'offline',
+      headline: 'Poor air',
+      schedule: [{ time: '2 pm – 4 pm', title: 'Go out', detail: 'Cleanest window.' }],
+      perMember: [{ name: 'Dadi', advice: 'Walk at 2 pm.' }],
+    },
+    'New Delhi, India',
+    'https://example.org/',
+  );
+  assert.match(text, /^SaansSaathi clean-air plan for New Delhi, India/);
+  assert.match(text, /• 2 pm – 4 pm: Go out/);
+  assert.match(text, /• Dadi: Walk at 2 pm\./);
+  assert.match(text, /Plan yours: https:\/\/example\.org\//);
+  assert.doesNotMatch(text, /\n\n\n/);
+});
+
+test('whatsappLink encodes text', async () => {
+  const { whatsappLink } = await import('../src/ui/share.js');
+  assert.equal(whatsappLink('a b&c'), 'https://wa.me/?text=a%20b%26c');
+});

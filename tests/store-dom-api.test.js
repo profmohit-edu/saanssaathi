@@ -95,3 +95,28 @@ test('HTTP errors are reported', async () => {
   const f = async () => ({ ok: false, status: 503, json: async () => ({}) });
   await assert.rejects(fetchAirQuality(10, 10, f), /503/);
 });
+
+test('forecast cache helpers are safe without storage', async () => {
+  const { saveForecast, loadForecast } = await import('../src/store.js');
+  saveForecast({ latitude: 1, longitude: 2 }, { hourly: {} });
+  assert.equal(loadForecast({ latitude: 1, longitude: 2 }), null);
+});
+
+test('forecast cache returns fresh same-place data only', async () => {
+  const mem = new Map();
+  globalThis.localStorage = {
+    setItem: (k, v) => mem.set(k, String(v)),
+    getItem: (k) => (mem.has(k) ? mem.get(k) : null),
+    removeItem: (k) => mem.delete(k),
+  };
+  try {
+    const { saveForecast, loadForecast } = await import('../src/store.js');
+    const place = { latitude: 28.6, longitude: 77.2 };
+    saveForecast(place, { ok: 1 }, 1000);
+    assert.deepEqual(loadForecast(place, 2000), { json: { ok: 1 }, at: 1000 });
+    assert.equal(loadForecast({ latitude: 19, longitude: 72 }, 2000), null);
+    assert.equal(loadForecast(place, 1000 + 25 * 3600 * 1000), null);
+  } finally {
+    delete globalThis.localStorage;
+  }
+});

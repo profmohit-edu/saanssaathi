@@ -1,0 +1,9 @@
+{
+  "name": "SaansSaathi · Smog Copilot",
+  "short_name": "SaansSaathi",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f6f3ee",
+  "theme_color": "#14213d",
+  "icons": [{ "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

@@ -1,0 +1,14 @@
+{
+  "name": "saanssaathi-smog-copilot",
+  "version": "1.0.0",
+  "description": "GenAI smog copilot: per-person PM2.5 dose, clean-air windows, swap simulator and Gemini plans for families in Indian cities.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "test:coverage": "node --test --experimental-test-coverage tests/*.test.js",
+    "start": "python3 -m http.server 8080"
+  },
+  "engines": { "node": ">=20" },
+  "license": "MIT"
+}

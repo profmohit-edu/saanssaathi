@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://air-quality-api.open-meteo.com https://geocoding-api.open-meteo.com https://generativelanguage.googleapis.com; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="description" content="SaansSaathi: a GenAI smog copilot that measures each family member's inhaled pollution dose and finds the choices that cut it most.">
+  <meta name="theme-color" content="#14213d">
+  <title>SaansSaathi · Smog Copilot for Families</title>
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="preconnect" href="https://air-quality-api.open-meteo.com" crossorigin>
+  <link rel="preconnect" href="https://geocoding-api.open-meteo.com" crossorigin>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="src/app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="#top" aria-label="SaansSaathi home">
+        <span class="lungs" aria-hidden="true"></span>
+        <span class="brand-text"><strong>SaansSaathi</strong><span>your breath companion</span></span>
+      </a>
+      <nav aria-label="Sections" class="nav">
+        <a href="#air">Air</a><a href="#family">Family</a><a href="#budget">Breath budget</a>
+        <a href="#swaps">Swaps</a><a href="#plan">Plan</a><a href="#ask">Ask</a>
+      </nav>
+      <button type="button" class="btn ghost" id="open-settings" aria-haspopup="dialog">
+        <span aria-hidden="true">⚙</span> AI settings
+      </button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <section class="hero wrap" id="top">
+      <p class="eyebrow">Winter smog, measured per person</p>
+      <h1>How much smog is your family <em>actually breathing</em>?</h1>
+      <p class="lede">AQI is the same for everyone in a city. Your dose isn't. A child playing at dusk, a grandparent on a 6 am walk and a two-wheeler commuter breathe very different amounts. SaansSaathi estimates each person's daily dose from the live forecast and their routine, then ranks the changes that cut it most.</p>
+    </section>
+
+    <section class="wrap card" id="air" aria-labelledby="air-h">
+      <div class="section-head">
+        <h2 id="air-h"><span class="step">1</span> Air where you live</h2>
+      </div>
+      <form class="place-form" id="place-form" role="search" autocomplete="off">
+        <label for="place-input">City or area</label>
+        <div class="row">
+          <input id="place-input" name="place" type="search" minlength="2" maxlength="80"
+                 placeholder="e.g. Delhi, Lucknow, Kolkata" aria-describedby="place-hint"
+                 aria-controls="place-results" aria-autocomplete="list" aria-expanded="false">
+          <button class="btn" type="submit">Search</button>
+          <button class="btn ghost" type="button" id="geo-btn">📍 Use my location</button>
+        </div>
+        <p id="place-hint" class="hint">Live hourly PM2.5 forecast from the Copernicus CAMS model via Open-Meteo.</p>
+        <ul id="place-results" class="place-results" role="listbox" aria-label="Matching places" hidden></ul>
+      </form>
+      <div id="air-now" class="air-now" aria-live="polite" aria-busy="true">
+        <p class="loading">Loading the air-quality forecast…</p>
+      </div>
+      <figure class="chart-wrap">
+        <figcaption id="chart-cap">Next 24 hours of PM2.5 (µg/m³). The cleanest 2-hour window is outlined.</figcaption>
+        <div id="chart" class="chart" role="img" aria-labelledby="chart-cap chart-summary"></div>
+        <p id="chart-summary" class="sr-only"></p>
+        <details class="data-table">
+          <summary>Show hourly numbers</summary>
+          <div id="chart-table"></div>
+        </details>
+      </figure>
+    </section>
+
+    <section class="wrap card" id="family" aria-labelledby="family-h">
+      <div class="section-head">
+        <h2 id="family-h"><span class="step">2</span> Your household</h2>
+        <div class="actions">
+          <button type="button" class="btn ghost" id="demo-btn">Load demo family</button>
+          <button type="button" class="btn" id="add-member">+ Add person</button>
+        </div>
+      </div>
+      <fieldset class="home-settings">
+        <legend>Home</legend>
+        <div class="home-grid" id="home-grid"></div>
+      </fieldset>
+      <div id="members" class="members"></div>
+    </section>
+
+    <section class="wrap card" id="budget" aria-labelledby="budget-h">
+      <div class="section-head">
+        <h2 id="budget-h"><span class="step">3</span> Breath budget</h2>
+        <p class="hint">Estimated PM2.5 each person inhales in 24 hours, by where it happens.</p>
+      </div>
+      <div id="budget-out" aria-live="polite"></div>
+      <p class="method"><strong>Method:</strong> dose = concentration × breathing rate × hours, added up over sleep, indoors, commute and outdoors. Breathing rates come from the US EPA Exposure Factors Handbook. Cigarette equivalent uses Berkeley Earth's rule of thumb that 22 µg/m³ for a day ≈ 1 cigarette. These are estimates for comparing choices, not medical measurements.</p>
+    </section>
+
+    <section class="wrap card" id="swaps" aria-labelledby="swaps-h">
+      <div class="section-head">
+        <h2 id="swaps-h"><span class="step">4</span> Swap simulator</h2>
+        <p class="hint">Tick swaps to see the combined effect on your family's dose and your street's emissions.</p>
+      </div>
+      <div id="swap-total" class="swap-total" aria-live="polite"></div>
+      <ol id="swap-list" class="swap-list"></ol>
+    </section>
+
+    <section class="wrap card" id="plan" aria-labelledby="plan-h">
+      <div class="section-head">
+        <h2 id="plan-h"><span class="step">5</span> Tomorrow's clean-air plan</h2>
+        <div class="actions">
+          <label for="lang" class="inline-label">Language</label>
+          <select id="lang"></select>
+          <button type="button" class="btn primary" id="gen-plan">✨ Personalise with Gemini</button>
+        </div>
+      </div>
+      <p id="plan-status" class="status" role="status"></p>
+      <div id="plan-out" aria-live="polite"></div>
+    </section>
+
+    <section class="wrap card" id="ask" aria-labelledby="ask-h">
+      <div class="section-head">
+        <h2 id="ask-h"><span class="step">6</span> Ask SaansSaathi</h2>
+        <p class="hint">Gemini answers using your family's own numbers.</p>
+      </div>
+      <div class="suggestions" id="suggestions"></div>
+      <div id="chat-log" class="chat-log" aria-live="polite" aria-label="Conversation"></div>
+      <form id="chat-form" class="chat-form">
+        <label for="chat-input" class="sr-only">Your question</label>
+        <input id="chat-input" type="text" maxlength="1000" placeholder="Can Dadi still do her morning walk this week?" required>
+        <button class="btn primary" type="submit">Ask</button>
+      </form>
+    </section>
+
+    <section class="wrap card" id="community-card" aria-labelledby="community-h">
+      <h2 id="community-h">Clean the air on your street</h2>
+      <p class="hint">Actions for your city that cut the emissions at the source.</p>
+      <ul id="community" class="hacks community"></ul>
+    </section>
+
+    <section class="wrap grid-2" aria-label="Indoor hacks and myths">
+      <div class="card" aria-labelledby="hacks-h">
+        <h2 id="hacks-h">Indoor air hacks</h2>
+        <ul id="hacks" class="hacks"></ul>
+      </div>
+      <div class="card" aria-labelledby="myths-h">
+        <h2 id="myths-h">Smog myths, busted</h2>
+        <dl id="myths" class="myths"></dl>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>Air data: <a href="https://open-meteo.com/en/docs/air-quality-api" rel="noopener noreferrer" target="_blank">Open-Meteo</a> (CAMS). AI: Google Gemini. SaansSaathi gives general guidance, not medical advice. If you have symptoms, see a doctor.</p>
+      <p>Your household data stays in this browser.</p>
+    </div>
+  </footer>
+
+  <dialog id="settings" aria-labelledby="settings-h">
+    <form method="dialog" id="settings-form">
+      <h2 id="settings-h">Gemini settings</h2>
+      <p>SaansSaathi calls Gemini directly from your browser with your own key. Nothing goes through our servers, because there aren't any. Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a>.</p>
+      <label for="api-key">Gemini API key</label>
+      <input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your key">
+      <label class="check"><input id="remember-key" type="checkbox"> Remember on this device (otherwise it's cleared when you close the tab)</label>
+      <label for="model">Model</label>
+      <input id="model" type="text" spellcheck="false" placeholder="gemini-3.6-flash">
+      <div class="dialog-actions">
+        <button class="btn ghost" value="cancel" type="submit">Close</button>
+        <button class="btn primary" value="save" id="save-settings" type="submit">Save</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>

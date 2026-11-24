@@ -16,17 +16,23 @@ test('metro detection is case and accent tolerant', () => {
 });
 
 test('Delhi gets the Green Delhi channel; other Indian cities get CPCB', () => {
-  const delhi = communityActions({ name: 'New Delhi', admin1: 'Delhi', country: 'India' }).map((a) => a.title).join('|');
+  const delhi = communityActions({ name: 'New Delhi', admin1: 'Delhi', country: 'India' })
+    .map((a) => a.title)
+    .join('|');
   assert.match(delhi, /Green Delhi/);
   assert.match(delhi, /Sameer/);
-  const varanasi = communityActions({ name: 'Varanasi', country: 'India' }).map((a) => a.title).join('|');
+  const varanasi = communityActions({ name: 'Varanasi', country: 'India' })
+    .map((a) => a.title)
+    .join('|');
   assert.doesNotMatch(varanasi, /Green Delhi/);
   assert.match(varanasi, /carpool/i);
   assert.doesNotMatch(varanasi, /metro/i);
 });
 
 test('outside India, no Indian complaint channels', () => {
-  const titles = communityActions({ name: 'Lahore', country: 'Pakistan' }).map((a) => a.title).join('|');
+  const titles = communityActions({ name: 'Lahore', country: 'Pakistan' })
+    .map((a) => a.title)
+    .join('|');
   assert.doesNotMatch(titles, /Sameer|Green Delhi/);
 });
 

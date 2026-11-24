@@ -7,8 +7,18 @@ import { searchPlaces, fetchAirQuality, validCoords, clearCache } from '../src/a
 test('sanitizeState rejects junk and clamps values', () => {
   const s = sanitizeState({
     home: { windows: 'sideways', purifier: 'yes', sources: ['incense', 'nuclear', 'incense'] },
-    members: [{ id: '<script>', name: 'x'.repeat(100), age: 'alien', commuteMode: 'rocket', commuteHours: 99,
-      outdoorHours: -5, conditions: ['asthma', 'flu'], mask: 'n95' }],
+    members: [
+      {
+        id: '<script>',
+        name: 'x'.repeat(100),
+        age: 'alien',
+        commuteMode: 'rocket',
+        commuteHours: 99,
+        outdoorHours: -5,
+        conditions: ['asthma', 'flu'],
+        mask: 'n95',
+      },
+    ],
   });
   assert.equal(s.home.windows, 'open');
   assert.equal(s.home.purifier, true);
@@ -67,7 +77,15 @@ test('air quality request uses unixtime and caches', async () => {
 test('place search ignores short queries and filters bad coords', async () => {
   clearCache();
   assert.deepEqual(await searchPlaces('a'), []);
-  const f = async () => ({ ok: true, json: async () => ({ results: [{ name: 'Delhi', latitude: 28.6, longitude: 77.2 }, { name: 'Bad', latitude: 999, longitude: 0 }] }) });
+  const f = async () => ({
+    ok: true,
+    json: async () => ({
+      results: [
+        { name: 'Delhi', latitude: 28.6, longitude: 77.2 },
+        { name: 'Bad', latitude: 999, longitude: 0 },
+      ],
+    }),
+  });
   const r = await searchPlaces('Delhi', f);
   assert.equal(r.length, 1);
 });

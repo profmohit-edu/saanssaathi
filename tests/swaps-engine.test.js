@@ -11,16 +11,25 @@ const state = () => ({ members: demoMembers(), home: openHome() });
 test('swaps are ranked by dose avoided, largest first', () => {
   const ranked = rankSwaps(state(), env);
   assert.ok(ranked.length >= 5);
-  for (let i = 1; i < ranked.length; i++) assert.ok(ranked[i - 1].deltaUg >= ranked[i].deltaUg);
+  for (let i = 1; i < ranked.length; i++) {
+    assert.ok(ranked[i - 1].deltaUg >= ranked[i].deltaUg);
+  }
   assert.ok(ranked.every((r) => r.pct >= 0 && r.pct <= 100));
 });
 
 test('only relevant swaps are suggested', () => {
   const s = state();
   s.home = { windows: 'closed', purifier: true, sources: [] };
-  s.members.forEach((m) => { m.mask = 'n95'; m.outdoorTime = 'best'; m.outdoorActivity = 'light'; m.commuteMode = 'none'; });
+  s.members.forEach((m) => {
+    m.mask = 'n95';
+    m.outdoorTime = 'best';
+    m.outdoorActivity = 'light';
+    m.commuteMode = 'none';
+  });
   const ids = rankSwaps(s, env).map((r) => r.id);
-  for (const id of ['seal', 'purifier', 'n95', 'timing', 'metro', 'source_incense']) assert.ok(!ids.includes(id), id);
+  for (const id of ['seal', 'purifier', 'n95', 'timing', 'metro', 'source_incense']) {
+    assert.ok(!ids.includes(id), id);
+  }
 });
 
 test('ranking does not mutate input state', () => {
@@ -39,7 +48,11 @@ test('switching to metro saves CO₂', () => {
 test('combining swaps compounds the reduction', () => {
   const ranked = rankSwaps(state(), env);
   const one = combine(state(), env, [ranked[0].id]);
-  const three = combine(state(), env, ranked.slice(0, 3).map((r) => r.id));
+  const three = combine(
+    state(),
+    env,
+    ranked.slice(0, 3).map((r) => r.id),
+  );
   assert.ok(three.pct > one.pct);
   assert.ok(three.after.total < three.before.total);
 });

@@ -1,6 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { nextHours, bestWindow, worstWindow, rushHourMean, ventilationHours, mean, formatRange } from '../src/windows.js';
+import {
+  nextHours,
+  bestWindow,
+  worstWindow,
+  rushHourMean,
+  ventilationHours,
+  mean,
+  formatRange,
+} from '../src/windows.js';
 import { buildEnvironment, parseOpenMeteo } from '../src/environment.js';
 import { smogSeries } from './fixtures.js';
 
@@ -30,7 +38,10 @@ test('worstWindow finds the peak', () => {
 });
 
 test('rush-hour mean uses 8–10 and 18–20', () => {
-  assert.equal(rushHourMean(nextHours(series, now)), mean([{ pm25: 220 }, { pm25: 190 }, { pm25: 190 }, { pm25: 220 }]));
+  assert.equal(
+    rushHourMean(nextHours(series, now)),
+    mean([{ pm25: 220 }, { pm25: 190 }, { pm25: 190 }, { pm25: 220 }]),
+  );
 });
 
 test('ventilation hours only when outdoors cleaner than indoors', () => {

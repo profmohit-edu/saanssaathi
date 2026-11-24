@@ -2,7 +2,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { computeDose, householdDose, normaliseMember, infiltrationRatio, UG_PER_CIGARETTE } from '../src/exposure.js';
 
-const adult = { age: 'adult', commuteMode: 'none', commuteHours: 0, outdoorHours: 0, outdoorActivity: 'light', mask: 'none' };
+const adult = {
+  age: 'adult',
+  commuteMode: 'none',
+  commuteHours: 0,
+  outdoorHours: 0,
+  outdoorActivity: 'light',
+  mask: 'none',
+};
 const home = { windows: 'open', purifier: false, sources: [] };
 
 test('an adult at home breathes about 12–15 m³/day', () => {
@@ -63,7 +70,14 @@ test('outdoorMeanFor overrides outdoor concentration', () => {
 });
 
 test('householdDose sums members', () => {
-  const h = householdDose([{ id: '1', name: 'A', ...adult }, { id: '2', name: 'B', ...adult }], home, { dailyMean: 100 });
+  const h = householdDose(
+    [
+      { id: '1', name: 'A', ...adult },
+      { id: '2', name: 'B', ...adult },
+    ],
+    home,
+    { dailyMean: 100 },
+  );
   assert.equal(h.perMember.length, 2);
   assert.ok(Math.abs(h.total - 2 * h.perMember[0].total) < 1e-6);
 });

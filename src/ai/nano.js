@@ -197,5 +197,6 @@ export async function translatePlan(plan, target, ai = browserAI()) {
   const perMember = await Promise.all(
     (plan.perMember ?? []).map(async (m) => ({ name: m.name, advice: await t(m.advice) })),
   );
-  return { ...plan, headline, impactStory, schedule, perMember, lang: target };
+  const alerts = await Promise.all((plan.alerts ?? []).map(async (a) => ({ ...a, text: await t(a.text) })));
+  return { ...plan, headline, impactStory, schedule, perMember, alerts, lang: target };
 }

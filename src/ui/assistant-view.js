@@ -8,6 +8,7 @@ import { householdDose, AGE_GROUPS } from '../exposure.js';
 import { buildOfflinePlan } from '../engine.js';
 import { buildContext, LANGUAGES } from '../gemini.js';
 import { resolveProvider, planWith, askWith, PROVIDER_LABELS } from '../ai/provider.js';
+import { warmTranslator } from '../ai/nano.js';
 import { loadApiKey, saveApiKey, savePrefs } from '../store.js';
 import { placeLabel } from '../format.js';
 import { isValidModel } from '../config.js';
@@ -43,8 +44,22 @@ async function chooseBackend({ app, actions }) {
  * @param {HTMLElement} status
  */
 const progressTo = (status) => (/** @type {number} */ f) => {
-  status.textContent = `Downloading Gemini Nano to this device… ${Math.round(f * 100)}% (one time only)`;
+  status.textContent =
+    f >= 1
+      ? 'Gemini Nano is ready. Writing your plan on this device…'
+      : `Downloading Gemini Nano to this device… ${Math.round(f * 100)}% (one time only)`;
 };
+
+/**
+ * Chrome only allows on-device language-pack downloads during a click, so
+ * start the translator before any await when the on-device path may be used.
+ * @param {import('../types.js').AppState} app
+ */
+function warmOnClick(app) {
+  if (!loadApiKey()) {
+    warmTranslator(app.prefs.lang);
+  }
+}
 
 /**
  * Generates the personalised plan with the best available AI and renders it.
@@ -55,6 +70,7 @@ async function onGeneratePlan(ctx) {
   if (!app.env || app.busy) {
     return;
   }
+  warmOnClick(app);
   const backend = await chooseBackend(ctx);
   if (!backend) {
     return;
@@ -107,6 +123,7 @@ async function onAsk(ctx, question) {
   if (!q || !app.env || app.busy) {
     return;
   }
+  warmOnClick(app);
   const backend = await chooseBackend(ctx);
   if (!backend) {
     return;

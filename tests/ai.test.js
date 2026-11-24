@@ -131,6 +131,21 @@ test('planWith(nano) returns a translated on-device plan; none throws', async ()
   await assert.rejects(planWith({ provider: 'none', apiKey: '', model: '', context: {}, lang: 'en' }), /No AI/);
 });
 
+test('planWith(nano) translates the attached health alerts too', async () => {
+  resetNanoCache();
+  const alerts = [{ who: 'Dadi', level: 'high', text: 'Keep the inhaler on hand' }];
+  const plan = await planWith({
+    provider: 'nano',
+    apiKey: '',
+    model: '',
+    context: {},
+    lang: 'hi',
+    ai: fakeAI(),
+    alerts,
+  });
+  assert.equal(plan.alerts?.[0].text, '[hi] Keep the inhaler on hand');
+});
+
 test('planWith(cloud) calls the Gemini API with the key in a header', async () => {
   const calls = [];
   const fetchImpl = async (url, init) => {

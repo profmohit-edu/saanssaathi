@@ -85,7 +85,7 @@ src/
   chart.js              dependency-free SVG chart + table
   dom.js                XSS-safe DOM builder & rich-text tokenizer
   store.js              validated persistence (localStorage / sessionStorage)
-tests/                  75 unit tests (node:test) + 5 end-to-end browser tests (Playwright)
+tests/                  81 unit tests (node:test) + 5 end-to-end browser tests (Playwright)
 ```
 
 The model layer (`exposure`, `swaps`, `environment`, `engine`, `gemini`) has no DOM code and is unit-tested directly. Views only render state and report edits back to the controller through a small `actions` interface.

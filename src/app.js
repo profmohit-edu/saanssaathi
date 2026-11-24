@@ -3,7 +3,7 @@
  * modules when to render. Views live in `src/ui/`; the model has no DOM code.
  * @module app
  */
-import { byId, debounce } from './dom.js';
+import { byId, debounce, inputById, errorMessage } from './dom.js';
 import { fetchAirQuality } from './api.js';
 import { buildEnvironment, parseOpenMeteo } from './environment.js';
 import { householdDose } from './exposure.js';
@@ -23,7 +23,7 @@ const DEFAULT_SELECTED_SWAPS = 3;
 
 /** @type {import('./types.js').AppState} */
 const app = {
-  state: /** @type {import('./types.js').AppState['state']} */ (loadState()),
+  state: loadState(),
   prefs: loadPrefs(),
   env: null,
   swaps: [],
@@ -78,7 +78,7 @@ async function loadAir() {
       const time = new Date(saved.at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
       applyForecast(saved.json, `Offline: showing the forecast saved at ${time}.`);
     } else {
-      showAirError(/** @type {Error} */ (e).message, loadAir);
+      showAirError(errorMessage(e), loadAir);
     }
   }
 }
@@ -113,7 +113,7 @@ function addMember() {
   app.state.members.push(newMember(`Person ${app.state.members.length + 1}`));
   renderMembers(ctx);
   ctx.actions.changed();
-  /** @type {HTMLInputElement | null} */ (byId('members').lastElementChild?.querySelector('input') ?? null)?.focus();
+  byId('members').lastElementChild?.querySelector('input')?.focus();
 }
 
 /** Replaces the household with the demo family. */
@@ -126,7 +126,7 @@ function loadDemo() {
   renderHome(ctx);
   renderMembers(ctx);
   persist();
-  /** @type {HTMLInputElement} */ (byId('place-input')).value = placeLabel(demo.place);
+  inputById('place-input').value = placeLabel(demo.place);
   if (placeChanged) {
     loadAir();
   } else {

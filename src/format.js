@@ -2,7 +2,7 @@
  * Pure formatting helpers used across the UI.
  * @module format
  */
-import { AGE_GROUPS, COMMUTE_MODES, MASKS } from './exposure.js';
+import { AGE_GROUPS, COMMUTE_MODES, MASKS, lookup } from './exposure.js';
 
 /** Health conditions a member can have. */
 export const CONDITIONS = Object.freeze({
@@ -38,11 +38,11 @@ export function placeLabel(place) {
  */
 export function memberSummary(m) {
   const parts = [
-    AGE_GROUPS[/** @type {keyof typeof AGE_GROUPS} */ (m.age)]?.label,
-    COMMUTE_MODES[/** @type {keyof typeof COMMUTE_MODES} */ (m.commuteMode)]?.label,
+    lookup(AGE_GROUPS, m.age)?.label,
+    lookup(COMMUTE_MODES, m.commuteMode)?.label,
     `${m.outdoorHours} h outdoors`,
-    MASKS[/** @type {keyof typeof MASKS} */ (m.mask)]?.label,
-    ...m.conditions.map((c) => CONDITIONS[/** @type {keyof typeof CONDITIONS} */ (c)]),
+    lookup(MASKS, m.mask)?.label,
+    ...m.conditions.map((c) => lookup(CONDITIONS, c)),
   ];
   return parts.filter(Boolean).join(' · ');
 }

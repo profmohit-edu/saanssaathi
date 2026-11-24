@@ -25,11 +25,34 @@ export function byId(id) {
 }
 
 /**
- * Creates an element.
- * @param {string} tag
+ * Typed lookups for the form controls the views use.
+ * @param {string} id
+ */
+export const inputById = (id) => /** @type {HTMLInputElement} */ (byId(id));
+/** @param {string} id */
+export const selectById = (id) => /** @type {HTMLSelectElement} */ (byId(id));
+/** @param {string} id */
+export const buttonById = (id) => /** @type {HTMLButtonElement} */ (byId(id));
+/** @param {string} id */
+export const dialogById = (id) => /** @type {HTMLDialogElement} */ (byId(id));
+
+/**
+ * Readable message from anything thrown.
+ * @param {unknown} error
+ * @returns {string}
+ */
+export function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Creates an element. The return type follows the tag, so `h('input')` is an
+ * HTMLInputElement and needs no cast.
+ * @template {keyof HTMLElementTagNameMap} K
+ * @param {K} tag
  * @param {Record<string, string|number|boolean|undefined>} [attrs]
  * @param {...Child} children
- * @returns {HTMLElement}
+ * @returns {HTMLElementTagNameMap[K]}
  */
 export function h(tag, attrs = {}, ...children) {
   const el = document.createElement(tag);

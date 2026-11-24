@@ -189,3 +189,14 @@ export function householdDose(members, home, env) {
   const total = perMember.reduce((s, d) => s + d.total, 0);
   return { perMember, total, cigarettes: total / UG_PER_CIGARETTE };
 }
+
+/**
+ * Looks up a profile table entry by a possibly-unknown key.
+ * @template T
+ * @param {Readonly<Record<string, T>>} table
+ * @param {string} key
+ * @returns {T | undefined}
+ */
+export function lookup(table, key) {
+  return Object.hasOwn(table, key) ? table[key] : undefined;
+}

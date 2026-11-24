@@ -197,7 +197,10 @@ function safeStorage(kind) {
   }
 }
 
-/** Loads the household (or the demo). */
+/**
+ * Loads the household (or the demo).
+ * @returns {import('./types.js').Household & {place: import('./types.js').Place}}
+ */
 export function loadState() {
   const s = safeStorage('localStorage');
   try {
